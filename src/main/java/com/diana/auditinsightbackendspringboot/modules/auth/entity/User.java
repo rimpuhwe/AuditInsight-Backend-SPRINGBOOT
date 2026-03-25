@@ -13,10 +13,10 @@ public class User {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
+    private Long id;  // unique user ID.
 
     @Column(unique = true, nullable = false)
-    private String email;
+    private String email;   // Email must be unique
 
     @Column(nullable = false)
     private String password; // stores hashed passwords only.
@@ -24,5 +24,5 @@ public class User {
     @Column(nullable = false)
     private Boolean isVerified = false;  // to track OTP verification.
 
-    private String fullName;
+    private String fullName;   // full name of the user.
 }
