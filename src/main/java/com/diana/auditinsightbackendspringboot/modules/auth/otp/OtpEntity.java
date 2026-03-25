@@ -26,4 +26,6 @@ public class OtpEntity {
 
     @Column(nullable = false)
     private Boolean used = false;   // has it been used yet?
+
+
 }
