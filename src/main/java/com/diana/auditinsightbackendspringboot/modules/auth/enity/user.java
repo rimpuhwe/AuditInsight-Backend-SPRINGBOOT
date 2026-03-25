@@ -23,4 +23,6 @@ public class user {
 
     @Column(nullable = false)
     private Boolean isVerified = false;  // to track OTP verification.
+
+    private String fullName;
 }
