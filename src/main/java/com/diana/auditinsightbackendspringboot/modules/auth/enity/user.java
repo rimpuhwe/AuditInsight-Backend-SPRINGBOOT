@@ -10,4 +10,11 @@ import lombok.*;
 @AllArgsConstructor
 @Builder
 public class user {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private long id;
+
+    @Column(unique = true, nullable = false)
+    private String email;
 }
