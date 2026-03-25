@@ -26,6 +26,18 @@ public class OtpService {
                 .build();
         otpRepository.save(otpEntity);
         return otp;
+    }
 
+    //Verify OTP
+
+    public boolean verifyOtp(Long userId, String code) {
+        return otpRepository.findByUserIdAndCode(userId, code)
+                .map(otp -> {
+                    if (otp.getUsed() || otp.getExpiryTime().isBefore(LocalDateTime.now())) {
+                        return false;
+                    }
+                    otp.setUsed(true);
+                    otpRepository
+                })
     }
 }
