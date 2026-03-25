@@ -37,7 +37,9 @@ public class OtpService {
                         return false;
                     }
                     otp.setUsed(true);
-                    otpRepository
+                    otpRepository.save(otp);
+                    return true;
                 })
+                .orElse(false);
     }
 }
