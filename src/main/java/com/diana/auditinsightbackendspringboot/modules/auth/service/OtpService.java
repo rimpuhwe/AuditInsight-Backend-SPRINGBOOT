@@ -21,6 +21,11 @@ public class OtpService {
         OtpEntity otpEntity = OtpEntity.builder()
                 .userId(userId)
                 .code(otp)
+                .expiryTime(LocalDateTime.now().plusMinutes(5))
+                .used(false)
+                .build();
+        otpRepository.save(otpEntity);
+        return otp;
 
     }
 }
