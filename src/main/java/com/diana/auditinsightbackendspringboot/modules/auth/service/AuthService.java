@@ -32,5 +32,11 @@ public class AuthService {
                 .isVerified(false)
                 .build();
 
+        user = userRepository.save(user);
+        otpService.generateOTP(user.getId()); // send OTP
+        return user;
     }
+
+    // LOGIN
+    pun
 }
