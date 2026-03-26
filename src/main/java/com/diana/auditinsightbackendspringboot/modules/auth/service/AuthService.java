@@ -68,4 +68,7 @@ public class AuthService {
     }
 
     // VERIFY OTP (for signup)
+    public void verifyOtp(Long userId, String code) {
+
+    }
 }
