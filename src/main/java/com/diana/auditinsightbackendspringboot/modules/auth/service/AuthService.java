@@ -63,6 +63,8 @@ public class AuthService {
                 .orElseThrow(() -> new RuntimeException("User not found"));
         boolean valid = otpService.verifyOtp(user.getId(), request.getOtp());
         if (!valid) throw new RuntimeException("Invalid OTP");
+        user.setPassword(passwordEncoder.encode(request.getNewPassword()));
+        userRepository.save(user);
 
 
     }
