@@ -71,7 +71,8 @@ public class AuthService {
     public void verifyOtp(Long userId, String code) {
         boolean valid = otpService.verifyOtp(userId, code);
         if (!valid) throw new RuntimeException("Invalid OTP");
-
-
+        User user = userRepository.findById(userId).orElseThrow();
+        user.setIsVerified(true);
+        userRepository.save(user);
     }
 }
