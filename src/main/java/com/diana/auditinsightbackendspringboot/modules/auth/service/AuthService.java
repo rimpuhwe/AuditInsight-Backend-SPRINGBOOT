@@ -25,5 +25,12 @@ public class AuthService {
             throw new RuntimeException("Email already exist")
         }
 
+        User user = User.builder()
+                .fullName(request.getFullName())
+                .email(request.getEmail())
+                .password(passwordEncoder.encode(request.getPassword()))
+                .isVerified(false)
+                .build();
+
     }
 }
