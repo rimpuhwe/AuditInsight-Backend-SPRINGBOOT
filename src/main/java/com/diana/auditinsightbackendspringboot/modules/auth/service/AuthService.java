@@ -46,7 +46,14 @@ public class AuthService {
         }
         if (!user.getIsVerified()){
             throw new RuntimeException("User not verified");
-
         }
+        return user;
+    }
+
+    // FORGOT PASSWORD
+    public void forgotPassword(ForgotPasswordRequest request){
+        User user = userRepository.findByEmail(request.getEmail())
+                .orElseThrow(() -> new RuntimeException("User not found"));
+        otpService.generateOTP(user.getId()); // send OTP for password reset
     }
 }
