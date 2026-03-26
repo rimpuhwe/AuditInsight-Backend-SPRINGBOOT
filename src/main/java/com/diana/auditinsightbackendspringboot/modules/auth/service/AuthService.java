@@ -69,6 +69,8 @@ public class AuthService {
 
     // VERIFY OTP (for signup)
     public void verifyOtp(Long userId, String code) {
+        boolean valid = otpService.verifyOtp(userId, code);
+        if (!valid)
 
     }
 }
