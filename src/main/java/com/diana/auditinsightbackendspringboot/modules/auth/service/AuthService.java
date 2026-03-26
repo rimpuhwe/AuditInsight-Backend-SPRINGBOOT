@@ -44,5 +44,9 @@ public class AuthService {
         if (!passwordEncoder.matches(request.getPassword(), user.getPassword())){
             throw new RuntimeException("Incorrect password");
         }
+        if (!user.getIsVerified()){
+            throw new RuntimeException("User not verified");
+
+        }
     }
 }
