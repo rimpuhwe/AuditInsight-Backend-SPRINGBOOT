@@ -56,4 +56,9 @@ public class AuthService {
                 .orElseThrow(() -> new RuntimeException("User not found"));
         otpService.generateOTP(user.getId()); // send OTP for password reset
     }
+
+    // RESET PASSWORD
+    public void resetPassword(ResetPasswordRequest request){
+
+    }
 }
