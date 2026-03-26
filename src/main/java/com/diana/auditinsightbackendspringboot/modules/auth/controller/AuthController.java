@@ -16,4 +16,14 @@ public class AuthController {
     public AuthController(AuthService authService) {
         this.authService = authService;
     }
+    @PostMapping("/signup")
+    public ResponseEntity<?> signup(@Valid @RequestBody SignupRequest request) {
+        authService.signup(request);
+        return ResponseEntity.ok("User registered. Check OTP to verify.");
+    }
+
+    @PostMapping("/login")
+    public ResponseEntity<?> login(@Valid @RequestBody LoginRequest request) {
+        authService.login(request);
+        return ResponseEntity.ok("Login successful.");
 }
