@@ -24,6 +24,8 @@ public class JwtUtil {
     }
 
     // Validation token
+public boolean validateToken(String token){
 
+}
 
 }
