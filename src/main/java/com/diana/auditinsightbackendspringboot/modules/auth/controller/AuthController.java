@@ -12,7 +12,7 @@ import java.util.Map;
 @RestController
 @RequestMapping("/api/auth")
 public class AuthController {
-    ...KKK
+    ...KKKNNNN
 
     private final AuthService authService;
 
