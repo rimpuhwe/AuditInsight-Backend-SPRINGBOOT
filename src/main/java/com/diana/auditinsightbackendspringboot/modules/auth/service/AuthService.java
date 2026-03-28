@@ -4,6 +4,7 @@ import com.diana.auditinsightbackendspringboot.modules.auth.dto.*;
 import com.diana.auditinsightbackendspringboot.modules.auth.entity.User;
 import com.diana.auditinsightbackendspringboot.modules.auth.otp.OtpEntity;
 import com.diana.auditinsightbackendspringboot.modules.auth.entity.repository.UserRepository;
+import com.diana.auditinsightbackendspringboot.modules.auth.security.JwtUtil;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
@@ -13,11 +14,13 @@ public class AuthService {
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final OtpService otpService;
+    private final JwtUtil jwtUtil;  // add this
 
-    public AuthService(UserRepository userRepository,PasswordEncoder PasswordEncoder,OtpService otpService) {
+    public AuthService(UserRepository userRepository, PasswordEncoder PasswordEncoder, OtpService otpService, JwtUtil jwtUtil) {
         this.userRepository = userRepository;
         this.passwordEncoder = PasswordEncoder;
         this.otpService = otpService;
+        this.jwtUtil = jwtUtil;
     }
  // SIGNUP
     public User signup(SignupRequest request) {
@@ -38,16 +41,23 @@ public class AuthService {
     }
 
     // LOGIN
-    public User login(LoginRequest request) {
+    public String login(LoginRequest request) {
+        // 1️⃣ Check if the user exists
         User user = userRepository.findByEmail(request.getEmail())
                 .orElseThrow(() -> new RuntimeException("User not found"));
-        if (!passwordEncoder.matches(request.getPassword(), user.getPassword())){
+
+        // 2️⃣ Check password
+        if (!passwordEncoder.matches(request.getPassword(), user.getPassword())) {
             throw new RuntimeException("Incorrect password");
         }
-        if (!user.getIsVerified()){
+
+        // 3️⃣ Check if user is verified via OTP
+        if (!user.getIsVerified()) {
             throw new RuntimeException("User not verified");
         }
-        return user;
+
+        // 4️⃣ Generate JWT token
+        return jwtUtil.generateToken(user.getId(), user.getEmail());
     }
 
     // FORGOT PASSWORD
