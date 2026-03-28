@@ -13,6 +13,7 @@ import java.util.Map;
 @RequestMapping("/api/auth")
 public class AuthController {
 
+
     private final AuthService authService;
 
     public AuthController(AuthService authService) {
