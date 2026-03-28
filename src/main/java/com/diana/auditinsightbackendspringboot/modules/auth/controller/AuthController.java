@@ -25,8 +25,6 @@ public class AuthController {
         return ResponseEntity.ok("User registered. Check OTP to verify.");
     }
 
-
-
     @PostMapping("/login")
     public ResponseEntity<?> login(@Valid @RequestBody LoginRequest request) {
         String token = authService.login(request);
