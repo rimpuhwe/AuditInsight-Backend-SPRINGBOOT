@@ -18,6 +18,7 @@ public class JwtUtil {
                 .setSubject(String.valueOf(userId))
                 .claim("email", email)
                 .setIssuedAt(new Date(System.currentTimeMillis() + EXPIRATION_MS))
+                .setExpiration(new Date(System.currentTimeMillis() + EXPIRATION_MS))
 
 
     }
