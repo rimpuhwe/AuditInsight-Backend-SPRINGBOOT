@@ -25,6 +25,8 @@ public class JwtUtil {
 
     // Validation token
 public boolean validateToken(String token){
+        try {
+            Jwts.parser().setSigningKey(SECRET_KEY)
 
 }
 
