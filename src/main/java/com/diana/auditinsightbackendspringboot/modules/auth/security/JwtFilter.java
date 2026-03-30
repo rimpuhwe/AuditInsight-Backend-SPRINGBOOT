@@ -22,8 +22,12 @@ public class JwtFilter implements Filter {
         HttpServletRequest req = (HttpServletRequest) request;
         String path = req.getRequestURI();
 
-        // ✅ Allow auth endpoints without JWT
-        if (path.startsWith("/api/auth")) {
+        // ✅ Allow auth + Swagger endpoints
+        if (path.startsWith("/api/auth") ||
+                path.startsWith("/swagger-ui") ||
+                path.startsWith("/v3/api-docs") ||
+                path.startsWith("/webjars")) {   // 👈 ADD THIS
+
             chain.doFilter(request, response);
             return;
         }
@@ -32,10 +36,12 @@ public class JwtFilter implements Filter {
 
         if (authHeader != null && authHeader.startsWith("Bearer ")) {
             String token = authHeader.substring(7);
+
             if (!jwtUtil.validateToken(token)) {
                 ((HttpServletResponse) response).sendError(HttpServletResponse.SC_UNAUTHORIZED, "Invalid Token");
                 return;
             }
+
         } else {
             ((HttpServletResponse) response).sendError(HttpServletResponse.SC_UNAUTHORIZED, "Missing Token");
             return;
