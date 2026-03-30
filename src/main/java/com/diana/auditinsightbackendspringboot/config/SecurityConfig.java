@@ -30,22 +30,24 @@ public class SecurityConfig {
         http
                 .csrf(csrf -> csrf.disable())
                 .authorizeHttpRequests(auth -> auth
-                        // Public endpoints
+                        // Public endpoints for Swagger
                         .requestMatchers(
                                 "/",
                                 "/index",
                                 "/swagger-ui/**",
+                                "/swagger-ui.html",
                                 "/v3/api-docs/**",
+                                "/webjars/**",
                                 "/api/auth/**"
                         ).permitAll()
-
                         // All other endpoints require authentication
                         .anyRequest().authenticated()
                 )
+                // OAuth2 login configuration
                 .oauth2Login(oauth -> oauth
-                        .successHandler(oAuth2SuccessHandler) // OAuth2 login success
+                        .successHandler(oAuth2SuccessHandler)
                 )
-                // JWT filter applied before UsernamePasswordAuthenticationFilter
+                // JWT filter before UsernamePasswordAuthenticationFilter
                 .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
