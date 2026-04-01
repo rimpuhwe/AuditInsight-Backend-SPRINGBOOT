@@ -7,8 +7,10 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import jakarta.validation.Valid;
 
+import java.util.HashMap;
 import java.util.Map;
 
+@CrossOrigin(origins = "http://localhost:3000")
 @RestController
 @RequestMapping("/api/auth")
 public class AuthController {
@@ -18,10 +20,21 @@ public class AuthController {
     public AuthController(AuthService authService) {
         this.authService = authService;
     }
+
     @PostMapping("/signup")
     public ResponseEntity<?> signup(@Valid @RequestBody SignupRequest request) {
-        authService.signup(request);
-        return ResponseEntity.ok("User registered. Check OTP to verify.");
+        try {
+            authService.signup(request);
+
+            Map<String, String> response = new HashMap<>();
+            response.put("message", "User registered successfully. Check OTP to verify.");
+            return ResponseEntity.ok(response);
+
+        } catch (RuntimeException e) {
+            Map<String, String> error = new HashMap<>();
+            error.put("message", e.getMessage()); // 👈 "Email already exist"
+            return ResponseEntity.badRequest().body(error);
+        }
     }
 
     @PostMapping("/login")
@@ -29,6 +42,7 @@ public class AuthController {
         String token = authService.login(request);
         return ResponseEntity.ok(Map.of("token", token));
     }
+
     @PostMapping("/forgot-password")
     public ResponseEntity<?> forgotPassword(@Valid @RequestBody ForgotPasswordRequest request) {
         authService.forgotPassword(request);
