@@ -23,22 +23,25 @@ public class AuthService {
         this.jwtUtil = jwtUtil;
     }
  // SIGNUP
-    public User signup(SignupRequest request) {
-        if(userRepository.findByEmail(request.getEmail()).isPresent()) {
-            throw new RuntimeException("Email already exist");
-        }
+ public User signup(SignupRequest request) {
 
-        User user = User.builder()
-                .fullName(request.getFullName())
-                .email(request.getEmail())
-                .password(passwordEncoder.encode(request.getPassword()))
-                .isVerified(false)
-                .build();
+     if (userRepository.findByEmail(request.getEmail()).isPresent()) {
+         throw new RuntimeException("Email already exists");
+     }
 
-        user = userRepository.save(user);
-        otpService.generateOTP(user.getId()); // send OTP
-        return user;
-    }
+     if (request.getPassword().length() < 6) {
+         throw new RuntimeException("Password must be at least 6 characters");
+     }
+
+     User user = User.builder()
+             .fullName(request.getFullName())
+             .email(request.getEmail())
+             .password(passwordEncoder.encode(request.getPassword()))
+             .isVerified(true) // ✅ IMPORTANT: auto-verify
+             .build();
+
+     return userRepository.save(user);
+ }
 
     // LOGIN
     public String login(LoginRequest request) {
@@ -50,11 +53,11 @@ public class AuthService {
         if (!passwordEncoder.matches(request.getPassword(), user.getPassword())) {
             throw new RuntimeException("Incorrect password");
         }
-
-        // 3️⃣ Check if user is verified via OTP
-        if (!user.getIsVerified()) {
-            throw new RuntimeException("User not verified");
-        }
+//
+//        // 3️⃣ Check if user is verified via OTP
+//        if (!user.getIsVerified()) {
+//            throw new RuntimeException("User not verified");
+//        }
 
         // 4️⃣ Generate JWT token
         return jwtUtil.generateToken(user.getId(), user.getEmail());

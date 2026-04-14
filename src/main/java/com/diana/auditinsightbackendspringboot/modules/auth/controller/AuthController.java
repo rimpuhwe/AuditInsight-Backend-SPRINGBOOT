@@ -27,20 +27,33 @@ public class AuthController {
             authService.signup(request);
 
             Map<String, String> response = new HashMap<>();
-            response.put("message", "User registered successfully. Check OTP to verify.");
+            response.put("message", "Account created successfully");
+
             return ResponseEntity.ok(response);
 
         } catch (RuntimeException e) {
             Map<String, String> error = new HashMap<>();
-            error.put("message", e.getMessage()); // 👈 "Email already exist"
+            error.put("message", e.getMessage());
+
             return ResponseEntity.badRequest().body(error);
         }
     }
-
     @PostMapping("/login")
     public ResponseEntity<?> login(@Valid @RequestBody LoginRequest request) {
-        String token = authService.login(request);
-        return ResponseEntity.ok(Map.of("token", token));
+        try {
+            String token = authService.login(request);
+
+            Map<String, String> response = new HashMap<>();
+            response.put("token", token);
+            response.put("message", "Login successful");
+
+            return ResponseEntity.ok(response);
+
+        } catch (RuntimeException e) {
+            Map<String, String> error = new HashMap<>();
+            error.put("message", e.getMessage()); // e.g. "Invalid credentials"
+            return ResponseEntity.badRequest().body(error);
+        }
     }
 
     @PostMapping("/forgot-password")
