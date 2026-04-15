@@ -3,8 +3,12 @@ package com.diana.auditinsightbackendspringboot.modules.auth.security;
 import jakarta.servlet.*;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
+
 import java.io.IOException;
+import java.util.ArrayList;
 
 @Component
 public class JwtFilter implements Filter {
@@ -20,13 +24,15 @@ public class JwtFilter implements Filter {
             throws IOException, ServletException {
 
         HttpServletRequest req = (HttpServletRequest) request;
+        HttpServletResponse res = (HttpServletResponse) response;
+
         String path = req.getRequestURI();
 
-        // ✅ Allow auth + Swagger endpoints
+        // ✅ Skip authentication for public endpoints
         if (path.startsWith("/api/auth") ||
                 path.startsWith("/swagger-ui") ||
                 path.startsWith("/v3/api-docs") ||
-                path.startsWith("/webjars")) {   // 👈 ADD THIS
+                path.startsWith("/webjars")) {
 
             chain.doFilter(request, response);
             return;
@@ -34,18 +40,28 @@ public class JwtFilter implements Filter {
 
         String authHeader = req.getHeader("Authorization");
 
-        if (authHeader != null && authHeader.startsWith("Bearer ")) {
-            String token = authHeader.substring(7);
-
-            if (!jwtUtil.validateToken(token)) {
-                ((HttpServletResponse) response).sendError(HttpServletResponse.SC_UNAUTHORIZED, "Invalid Token");
-                return;
-            }
-
-        } else {
-            ((HttpServletResponse) response).sendError(HttpServletResponse.SC_UNAUTHORIZED, "Missing Token");
+        // ❌ No token provided
+        if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+            res.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Missing Token");
             return;
         }
+
+        String token = authHeader.substring(7);
+
+        // ❌ Invalid token
+        if (!jwtUtil.validateToken(token)) {
+            res.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Invalid Token");
+            return;
+        }
+
+        // ✅ Extract userId (FIXED TYPE: Long)
+        Long userId = jwtUtil.getUserIdFromToken(token);
+
+        // ✅ Set authentication in Spring Security context
+        UsernamePasswordAuthenticationToken auth =
+                new UsernamePasswordAuthenticationToken(userId, null, new ArrayList<>());
+
+        SecurityContextHolder.getContext().setAuthentication(auth);
 
         chain.doFilter(request, response);
     }
