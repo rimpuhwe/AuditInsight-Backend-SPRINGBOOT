@@ -8,7 +8,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
 
 import java.io.IOException;
-import java.util.ArrayList;
+import java.util.List;
 
 @Component
 public class JwtFilter implements Filter {
@@ -20,7 +20,9 @@ public class JwtFilter implements Filter {
     }
 
     @Override
-    public void doFilter(ServletRequest request, ServletResponse response, FilterChain chain)
+    public void doFilter(ServletRequest request,
+                         ServletResponse response,
+                         FilterChain chain)
             throws IOException, ServletException {
 
         HttpServletRequest req = (HttpServletRequest) request;
@@ -28,7 +30,7 @@ public class JwtFilter implements Filter {
 
         String path = req.getRequestURI();
 
-        // ✅ Skip authentication for public endpoints
+        // ✅ skip public routes
         if (path.startsWith("/api/auth") ||
                 path.startsWith("/swagger-ui") ||
                 path.startsWith("/v3/api-docs") ||
@@ -40,7 +42,6 @@ public class JwtFilter implements Filter {
 
         String authHeader = req.getHeader("Authorization");
 
-        // ❌ No token provided
         if (authHeader == null || !authHeader.startsWith("Bearer ")) {
             res.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Missing Token");
             return;
@@ -48,18 +49,20 @@ public class JwtFilter implements Filter {
 
         String token = authHeader.substring(7);
 
-        // ❌ Invalid token
         if (!jwtUtil.validateToken(token)) {
             res.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Invalid Token");
             return;
         }
 
-        // ✅ Extract userId (FIXED TYPE: Long)
         Long userId = jwtUtil.getUserIdFromToken(token);
 
-        // ✅ Set authentication in Spring Security context
+        // ✅ THIS IS THE CORRECT PLACE
         UsernamePasswordAuthenticationToken auth =
-                new UsernamePasswordAuthenticationToken(userId, null, new ArrayList<>());
+                new UsernamePasswordAuthenticationToken(
+                        userId,
+                        null,
+                        List.of()
+                );
 
         SecurityContextHolder.getContext().setAuthentication(auth);
 

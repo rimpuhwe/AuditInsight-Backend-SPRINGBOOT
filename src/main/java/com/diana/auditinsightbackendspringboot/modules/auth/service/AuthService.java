@@ -37,10 +37,14 @@ public class AuthService {
              .fullName(request.getFullName())
              .email(request.getEmail())
              .password(passwordEncoder.encode(request.getPassword()))
-             .isVerified(true) // ✅ IMPORTANT: auto-verify
+             .isVerified(false) // user must verify OTP first
              .build();
 
-     return userRepository.save(user);
+     User savedUser = userRepository.save(user);
+
+     otpService.generateOTP(savedUser.getId()); // generate OTP after signup
+
+     return savedUser;
  }
 
     // LOGIN

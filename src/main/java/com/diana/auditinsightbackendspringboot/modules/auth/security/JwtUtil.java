@@ -14,9 +14,9 @@ public class JwtUtil {
     @Value("${jwt.secret}")
     private String secret;
 
-    private static final long EXPIRATION_MS = 1000 * 60 * 60; // 1 hour
+    private static final long EXPIRATION_MS = 1000 * 60 * 30; // 30 minutes
 
-    // ✅ Build signing key from application.properties
+    // Build signing key from application.properties
     private SecretKey getKey() {
         return Keys.hmacShaKeyFor(secret.getBytes());
     }
@@ -28,7 +28,7 @@ public class JwtUtil {
                 .claim("email", email)
                 .setIssuedAt(new Date())
                 .setExpiration(new Date(System.currentTimeMillis() + EXPIRATION_MS))
-                .signWith(getKey()) // ✅ FIXED
+                .signWith(getKey())
                 .compact();
     }
 
@@ -36,7 +36,7 @@ public class JwtUtil {
     public boolean validateToken(String token) {
         try {
             Jwts.parserBuilder()
-                    .setSigningKey(getKey()) // ✅ FIXED
+                    .setSigningKey(getKey())
                     .build()
                     .parseClaimsJws(token);
             return true;
@@ -48,7 +48,7 @@ public class JwtUtil {
     // Extract userId
     public Long getUserIdFromToken(String token) {
         Claims claims = Jwts.parserBuilder()
-                .setSigningKey(getKey()) // ✅ FIXED
+                .setSigningKey(getKey())
                 .build()
                 .parseClaimsJws(token)
                 .getBody();
