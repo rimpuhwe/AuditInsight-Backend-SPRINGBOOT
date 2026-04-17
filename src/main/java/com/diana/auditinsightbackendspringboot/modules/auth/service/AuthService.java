@@ -2,7 +2,6 @@ package com.diana.auditinsightbackendspringboot.modules.auth.service;
 
 import com.diana.auditinsightbackendspringboot.modules.auth.dto.*;
 import com.diana.auditinsightbackendspringboot.modules.auth.entity.User;
-import com.diana.auditinsightbackendspringboot.modules.auth.otp.OtpEntity;
 import com.diana.auditinsightbackendspringboot.modules.auth.entity.repository.UserRepository;
 import com.diana.auditinsightbackendspringboot.modules.auth.security.JwtUtil;
 import org.springframework.security.crypto.password.PasswordEncoder;
