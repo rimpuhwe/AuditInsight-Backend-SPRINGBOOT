@@ -49,24 +49,23 @@ public class AuthService {
 
     // LOGIN
     public String login(LoginRequest request) {
-        // 1️⃣ Check if the user exists
+        // 1. Check if user exists
         User user = userRepository.findByEmail(request.getEmail())
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
-        // 2️⃣ Check password
+        // 2. Check password
         if (!passwordEncoder.matches(request.getPassword(), user.getPassword())) {
             throw new RuntimeException("Incorrect password");
         }
-//
-//        // 3️⃣ Check if user is verified via OTP
-//        if (!user.getIsVerified()) {
-//            throw new RuntimeException("User not verified");
-//        }
 
-        // 4️⃣ Generate JWT token
+        // 3. Check OTP verification
+        if (!user.getIsVerified()) {
+            throw new RuntimeException("User not verified");
+        }
+
+        // 4. Generate JWT
         return jwtUtil.generateToken(user.getId(), user.getEmail());
     }
-
     // FORGOT PASSWORD
     public void forgotPassword(ForgotPasswordRequest request){
         User user = userRepository.findByEmail(request.getEmail())
