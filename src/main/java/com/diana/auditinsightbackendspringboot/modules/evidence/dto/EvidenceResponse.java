@@ -2,6 +2,7 @@ package com.diana.auditinsightbackendspringboot.modules.evidence.dto;
 
 import lombok.Data;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 
@@ -30,5 +31,15 @@ public class EvidenceResponse {
 
     private String notes;
 
+    /* =========================
+       🔗 TRANSACTION LINK
+    ========================= */
     private Long transactionId;
+
+    /* =========================
+       💰 FINANCIAL CONTEXT
+    ========================= */
+    private BigDecimal amount;
+
+    private String counterpartyName;
 }

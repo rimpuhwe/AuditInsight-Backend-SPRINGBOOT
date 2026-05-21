@@ -1,0 +1,46 @@
+version: '3.9'
+
+services:
+
+  postgres:
+    image: postgres:16
+    container_name: auditinsight-postgres
+
+    environment:
+      POSTGRES_DB: AuditInsightDatabase
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+
+    ports:
+      - "5433:5432"
+
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  backend:
+    build: .
+    container_name: auditinsight-backend
+
+    depends_on:
+      - postgres
+
+    ports:
+      - "8081:8080"
+
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/AuditInsightDatabase
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: postgres
+
+      JWT_SECRET: 8f93d7bc4ea812fa90c32d1f73cbb2d19fa472839d7cb19384ae2f73db871c9a
+
+      SPRING_SECURITY_OAUTH2_CLIENT_REGISTRATION_GOOGLE_CLIENT_ID: your_google_client_id
+      SPRING_SECURITY_OAUTH2_CLIENT_REGISTRATION_GOOGLE_CLIENT_SECRET: your_google_client_secret
+
+      SPRING_MAIL_USERNAME: your_email@gmail.com
+      SPRING_MAIL_PASSWORD: your_email_app_password
+
+    restart: always
+
+volumes:
+  postgres_data:

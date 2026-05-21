@@ -25,4 +25,6 @@ public class User {
     private Boolean isVerified = false;  // to track OTP verification.
 
     private String fullName;   // full name of the user.
+
+
 }

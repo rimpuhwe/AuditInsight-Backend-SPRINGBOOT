@@ -12,10 +12,7 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
-
-import org.springframework.web.cors.CorsConfiguration;
-import org.springframework.web.cors.CorsConfigurationSource;
-import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
+import org.springframework.web.cors.*;
 
 import java.util.List;
 
@@ -36,7 +33,6 @@ public class SecurityConfig {
         return new BCryptPasswordEncoder();
     }
 
-    // ✅ CORS CONFIG
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration config = new CorsConfiguration();
@@ -56,9 +52,7 @@ public class SecurityConfig {
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
 
         http
-                // ✅ ENABLE CORS
                 .cors(Customizer.withDefaults())
-
                 .csrf(csrf -> csrf.disable())
 
                 .authorizeHttpRequests(auth -> auth
@@ -70,12 +64,17 @@ public class SecurityConfig {
                                 "/login/**",
                                 "/swagger-ui/**",
                                 "/v3/api-docs/**",
-                                "/api/transactions/**"
+
+                                // APIs
+                                "/api/transactions/**",
+                                "/api/evidence/**",
+
+                                // IMPORTANT: file access
+                                "/uploads/**"
                         ).permitAll()
                         .anyRequest().authenticated()
                 )
 
-                // ✅ GOOGLE LOGIN WITH JWT SUCCESS HANDLER
                 .oauth2Login(oauth -> oauth
                         .successHandler(oAuth2SuccessHandler)
                 )
@@ -84,8 +83,7 @@ public class SecurityConfig {
                         session.sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED)
                 );
 
-        // ⚠️ JWT FILTER TEMPORARILY DISABLED
-         http.addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);
+        http.addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
     }
