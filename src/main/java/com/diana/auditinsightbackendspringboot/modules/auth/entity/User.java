@@ -19,7 +19,7 @@ public class User {
     private String email;   // Email must be unique
 
     @Column(nullable = false)
-    private String password; // stores hashed passwords onlyy.
+    private String password; // stores hashed passwords only.
 
     @Column(nullable = false)
     private Boolean isVerified = false;  // to track OTP verification.
