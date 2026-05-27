@@ -28,6 +28,21 @@ public class EvidenceMapper {
                 .build();
     }
 
+    public static void updateEntity(Evidence entity, EvidenceRequest dto, Transaction transaction) {
+        entity.setName(dto.getName());
+        entity.setCategory(dto.getCategory());
+        entity.setSubCategory(dto.getSubCategory());
+        entity.setType(dto.getType());
+        entity.setUrl(dto.getUrl());
+        entity.setDate(dto.getDate());
+        entity.setUploadedBy(dto.getUploadedBy());
+        entity.setStatus(dto.getStatus());
+        entity.setNotes(dto.getNotes());
+        entity.setTransaction(transaction);
+        entity.setAmount(dto.getAmount());
+        entity.setCounterpartyName(dto.getCounterpartyName());
+    }
+
     /* ENTITY → RESPONSE */
     public static EvidenceResponse toResponse(Evidence e) {
 

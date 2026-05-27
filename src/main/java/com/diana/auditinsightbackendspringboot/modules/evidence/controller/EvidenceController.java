@@ -88,4 +88,28 @@ public class EvidenceController {
                 )
         );
     }
+
+    @PutMapping("/{id}")
+    public ResponseEntity<EvidenceResponse> update(
+            @PathVariable Long id,
+            @RequestBody EvidenceRequest request
+    ) {
+        return ResponseEntity.ok(service.update(id, request));
+    }
+
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Void> delete(@PathVariable Long id) {
+        service.delete(id);
+        return ResponseEntity.noContent().build();
+    }
+
+    @PatchMapping("/{id}/verify")
+    public ResponseEntity<EvidenceResponse> verify(@PathVariable Long id) {
+        return ResponseEntity.ok(service.verify(id));
+    }
+
+    @PatchMapping("/{id}/reject")
+    public ResponseEntity<EvidenceResponse> reject(@PathVariable Long id) {
+        return ResponseEntity.ok(service.reject(id));
+    }
 }

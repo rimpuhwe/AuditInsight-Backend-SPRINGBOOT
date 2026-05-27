@@ -1,7 +1,9 @@
 package com.diana.auditinsightbackendspringboot.modules.transactions.dto;
 
 import lombok.Data;
+
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 
 @Data
 public class TransactionResponse {
@@ -21,4 +23,8 @@ public class TransactionResponse {
     private String status;
 
     private Integer riskScore;
+
+    private LocalDateTime createdAt;
+
+    private LocalDateTime updatedAt;
 }
