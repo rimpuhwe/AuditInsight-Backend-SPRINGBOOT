@@ -39,29 +39,39 @@ public class EvidenceService {
     }
 
     public EvidenceResponse getById(Long id) {
-        Evidence e = repository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Evidence not found"));
-
-        return EvidenceMapper.toResponse(e);
+        return EvidenceMapper.toResponse(findEvidenceOrThrow(id));
     }
 
     public EvidenceResponse create(EvidenceRequest request) {
-
-        Transaction transaction = null;
-
-        if (request.getTransactionId() != null) {
-            transaction = transactionRepository.findById(request.getTransactionId())
-                    .orElseThrow(() -> new RuntimeException("Transaction not found"));
-        }
-
+        Transaction transaction = resolveTransaction(request.getTransactionId());
         Evidence saved = repository.save(
                 EvidenceMapper.toEntity(request, transaction)
         );
-
         return EvidenceMapper.toResponse(saved);
     }
 
-    // ✅ FILE UPLOAD WITH VALIDATION
+    public EvidenceResponse update(Long id, EvidenceRequest request) {
+        Evidence evidence = findEvidenceOrThrow(id);
+        Transaction transaction = resolveTransaction(request.getTransactionId());
+        EvidenceMapper.updateEntity(evidence, request, transaction);
+        Evidence saved = repository.save(evidence);
+        return EvidenceMapper.toResponse(saved);
+    }
+
+    public void delete(Long id) {
+        Evidence evidence = findEvidenceOrThrow(id);
+        deleteUploadedFile(evidence.getUrl());
+        repository.delete(evidence);
+    }
+
+    public EvidenceResponse verify(Long id) {
+        return updateReviewStatus(id, "Verified");
+    }
+
+    public EvidenceResponse reject(Long id) {
+        return updateReviewStatus(id, "Rejected");
+    }
+
     public EvidenceResponse uploadEvidence(
             MultipartFile file,
             Long transactionId,
@@ -72,8 +82,6 @@ public class EvidenceService {
             java.math.BigDecimal amount,
             String counterpartyName
     ) {
-
-        // ✅ FILE TYPE VALIDATION
         String contentType = file.getContentType();
 
         List<String> allowedTypes = List.of(
@@ -89,20 +97,17 @@ public class EvidenceService {
         }
 
         try {
-
             Transaction transaction = transactionRepository
                     .findById(transactionId)
                     .orElseThrow(() ->
                             new RuntimeException("Transaction not found"));
 
-            // ✅ CREATE UPLOADS FOLDER
             String uploadDir =
                     System.getProperty("user.home")
                             + "/auditinsight-uploads/";
 
             Files.createDirectories(Paths.get(uploadDir));
 
-            // ✅ UNIQUE FILE NAME
             String fileName =
                     UUID.randomUUID()
                             + "_"
@@ -116,40 +121,26 @@ public class EvidenceService {
                     StandardCopyOption.REPLACE_EXISTING
             );
 
-            // ✅ SAVE EVIDENCE
             Evidence evidence = Evidence.builder()
-
-                    // DOCUMENT
                     .name(
                             name != null && !name.isBlank()
                                     ? name
                                     : file.getOriginalFilename()
                     )
-
                     .category(category)
                     .subCategory(subCategory)
-
-                    // FILE
                     .type(contentType)
-
                     .url(
                             "http://localhost:8080/uploads/"
                                     + fileName
                     )
-
-                    // META
                     .uploadedAt(LocalDateTime.now())
                     .date(java.time.LocalDate.now())
                     .status("Pending")
                     .notes(notes)
-
-                    // RELATION
                     .transaction(transaction)
-
-                    // FINANCIALS
                     .amount(amount)
                     .counterpartyName(counterpartyName)
-
                     .build();
 
             Evidence saved = repository.save(evidence);
@@ -157,7 +148,6 @@ public class EvidenceService {
             return EvidenceMapper.toResponse(saved);
 
         } catch (IOException e) {
-
             throw new RuntimeException(
                     "File upload failed: " + e.getMessage()
             );
@@ -165,9 +155,58 @@ public class EvidenceService {
     }
 
     public List<EvidenceResponse> getByTransaction(Long transactionId) {
+        if (!transactionRepository.existsById(transactionId)) {
+            throw new RuntimeException("Transaction not found");
+        }
+
         return repository.findByTransaction_Id(transactionId)
                 .stream()
                 .map(EvidenceMapper::toResponse)
                 .collect(Collectors.toList());
+    }
+
+    private EvidenceResponse updateReviewStatus(Long id, String targetStatus) {
+        Evidence evidence = findEvidenceOrThrow(id);
+
+        if (!"pending".equalsIgnoreCase(evidence.getStatus())) {
+            throw new RuntimeException(
+                    "Only evidence with status 'Pending' can be verified or rejected"
+            );
+        }
+
+        evidence.setStatus(targetStatus);
+        Evidence saved = repository.save(evidence);
+        return EvidenceMapper.toResponse(saved);
+    }
+
+    private Evidence findEvidenceOrThrow(Long id) {
+        return repository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Evidence not found"));
+    }
+
+    private Transaction resolveTransaction(Long transactionId) {
+        if (transactionId == null) {
+            return null;
+        }
+
+        return transactionRepository.findById(transactionId)
+                .orElseThrow(() -> new RuntimeException("Transaction not found"));
+    }
+
+    private void deleteUploadedFile(String url) {
+        if (url == null || !url.contains("/uploads/")) {
+            return;
+        }
+
+        String fileName = url.substring(url.lastIndexOf('/') + 1);
+        String uploadDir =
+                System.getProperty("user.home") + "/auditinsight-uploads/";
+
+        try {
+            Path filePath = Paths.get(uploadDir, fileName);
+            Files.deleteIfExists(filePath);
+        } catch (Exception ignored) {
+            // File may already be removed
+        }
     }
 }

@@ -10,4 +10,6 @@ import java.util.List;
 public interface EvidenceRepository extends JpaRepository<Evidence, Long> {
 
     List<Evidence> findByTransaction_Id(Long transactionId);
+
+    void deleteByTransaction_Id(Long transactionId);
 }
