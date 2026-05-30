@@ -32,60 +32,41 @@ public class CustomOAuth2UserService extends DefaultReactiveOAuth2UserService {
     public Mono<OAuth2User> loadUser(OAuth2UserRequest userRequest) throws OAuth2AuthenticationException {
         return super.loadUser(userRequest).flatMap(oAuth2User -> {
             Map<String, Object> attributes = oAuth2User.getAttributes();
-            String username = (String) attributes.get("email");
+            String email = (String) attributes.get("email");
             String registrationId = userRequest.getClientRegistration().getRegistrationId();
 
-            String nameAttributeKey;
-            String fullName;
-
-            if ("google".equals(registrationId)) {
-                nameAttributeKey = "sub";
-                fullName = (String) attributes.get("given_name");
-            } else {
+            if (!"google".equals(registrationId)) {
                 return Mono.error(new OAuth2AuthenticationException("Unknown provider: " + registrationId));
             }
 
-            return userRepository.findByUsername(username)
+            String givenName = (String) attributes.get("given_name");
+            String familyName = (String) attributes.get("family_name");
+            String fullName = (givenName != null ? givenName : "") +
+                              (familyName != null ? " " + familyName : "");
+
+            return userRepository.findByUsername(email)
                     .switchIfEmpty(Mono.defer(() -> {
                         User user = new User();
-                        user.setFullName(fullName);
+                        user.setFullName(fullName.trim());
                         user.setAuthProvider(registrationId);
-                        user.setUsername(username);
+                        user.setUsername(email);
                         user.setPassword("");
-                        user.setRole(assignRole());
+                        user.setRole(Role.CLIENT);
+                        user.setVerified(true);
 
                         return userRepository.save(user).flatMap(savedUser -> {
-                            if (savedUser.getRole() == Role.CLIENT) {
-                                ClientProfile profile = getClientProfile(username, fullName);
-                                return clientRepository.save(profile).thenReturn(savedUser);
-                            }
-                            return Mono.just(savedUser);
+                            ClientProfile profile = new ClientProfile();
+                            profile.setEmailAddress(email);
+                            profile.setFirstName(givenName);
+                            profile.setLastName(familyName);
+                            return clientRepository.save(profile).thenReturn(savedUser);
                         });
                     }))
                     .map(user -> new DefaultOAuth2User(
                             Collections.singleton(new SimpleGrantedAuthority("ROLE_" + user.getRole().name())),
                             attributes,
-                            nameAttributeKey
+                            "sub"
                     ));
         });
-    }
-
-    private static ClientProfile getClientProfile(String username, String fullName) {
-        ClientProfile profile = new ClientProfile();
-        profile.setEmailAddress(username);
-        profile.setFirstName(fullName);
-
-        if (fullName != null) {
-            String[] nameParts = fullName.split(" ", 2);
-            profile.setFirstName(nameParts[0]);
-            if (nameParts.length > 1) {
-                profile.setLastName(nameParts[1]);
-            }
-        }
-        return profile;
-    }
-
-    public Role assignRole() {
-        return Role.CLIENT;
     }
 }

@@ -93,6 +93,10 @@ public class AuthService {
         return repo.findByUsername(request.getUsername())
                 .switchIfEmpty(Mono.error(new InvalidRecord("Username not found")))
                 .flatMap(user -> {
+                    if (!"JWT".equals(user.getAuthProvider())) {
+                        return Mono.error(new InvalidRecord(
+                                "This account uses social login. Please sign in with " + user.getAuthProvider() + "."));
+                    }
                     if (!encoder.matches(request.getPassword(), user.getPassword())) {
                         return Mono.error(new InvalidRecord("Invalid credentials"));
                     }
@@ -129,7 +133,8 @@ public class AuthService {
         return Mono.just(new LoginMessage(HttpStatus.OK, "Successfully Login", token, user.getRole()));
     }
 
-    // BUG FIX: delete any existing OTP for this email before saving a new one.
+    // BUG FIX: delete any existing OTP
+    // for this email before saving a new one.
     // Without this, a user requesting a new OTP ends up with multiple OTP rows, and
     // findByEmail returns an unpredictable one — making resend/re-verify unreliable.
     private Mono<String> generateOtp(String email) {
@@ -184,7 +189,7 @@ public class AuthService {
                                                                 "A new OTP has been sent to your email."))
                                         );
                             })
-                            .switchIfEmpty(
+                            .switchIfEmpty(Mono.defer(() ->
                                     generateOtp(email)
                                             .flatMap(newOtp ->
                                                     Mono.fromRunnable(() -> emailService.sendVerificationEmail(
@@ -192,7 +197,7 @@ public class AuthService {
                                                             .subscribeOn(Schedulers.boundedElastic())
                                                             .thenReturn(new ResponseMessage(HttpStatus.OK,
                                                                     "A new OTP has been sent to your email."))
-                                            )
+                                            ))
                             );
                 });
     }

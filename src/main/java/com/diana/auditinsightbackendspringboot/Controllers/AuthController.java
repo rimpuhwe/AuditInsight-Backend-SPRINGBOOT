@@ -26,21 +26,31 @@ public class AuthController {
     }
 
     @PostMapping("/sign-up")
-    @Operation(summary = "Register new account")
+    @Operation(
+            summary = "Register new account" ,
+            description = "all users (CLIENT/AUDITOR) are going to register by choosing their role and provide other required informations. " +
+                    "for the CLIENT they are going to receive the OTP on their registered email , while the AUDITORS they are going to wait for the admin to approve their accounts"
+    )
     public Mono<ResponseEntity<ResponseMessage>> signup(@Valid @RequestBody UserRegister request) {
         return authService.registerUser(request)
                 .map(response -> new ResponseEntity<>(response, response.getStatus()));
     }
 
     @PostMapping("/login")
-    @Operation(summary = "Login user")
+    @Operation(
+            summary = "Login user" ,
+            description = "all users are using the same login entry by providing the required data"
+    )
     public Mono<ResponseEntity<LoginMessage>> login(@Valid @RequestBody LoginRequest request) {
         return authService.login(request)
                 .map(response -> new ResponseEntity<>(response, HttpStatus.OK));
     }
 
     @PostMapping("/verify-otp")
-    @Operation(summary = "Verify OTP")
+    @Operation(
+            summary = "Verify OTP" ,
+            description = " the OTP sent on your registered email , you need to verify first so that your account got to be activated. Note: this applies only on the CLIENT users"
+    )
     public Mono<ResponseEntity<ResponseMessage>> verifyOtp(@Valid @RequestBody OtpRequest otpRequest) {
         return authService.verifyOtp(otpRequest)
                 .map(response -> new ResponseEntity<>(response, HttpStatus.OK));
@@ -48,7 +58,10 @@ public class AuthController {
 
 
     @PostMapping("/resend-otp")
-    @Operation(summary = "Resend OTP to email")
+    @Operation(
+            summary = "Resend OTP to email",
+            description = "Resent the OTP once the other one got expired "
+    )
     public Mono<ResponseEntity<ResponseMessage>> resendOtp(@RequestParam String email) {
         return authService.resendOtp(email)
                 .map(response -> new ResponseEntity<>(response, HttpStatus.OK));

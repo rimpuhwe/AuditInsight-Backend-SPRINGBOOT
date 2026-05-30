@@ -158,6 +158,22 @@ class AuthServiceTest {
     }
 
     @Test
+    void login_socialLoginUser_emitsInvalidRecord() {
+        User u = user("alice@test.com", Role.CLIENT);
+        u.setAuthProvider("google");
+        when(userRepository.findByUsername("alice@test.com")).thenReturn(Mono.just(u));
+
+        LoginRequest req = new LoginRequest();
+        req.setUsername("alice@test.com");
+        req.setPassword("Password1@");
+
+        StepVerifier.create(authService.login(req))
+                .expectErrorMatches(e -> e instanceof InvalidRecord
+                        && e.getMessage().contains("social login"))
+                .verify();
+    }
+
+    @Test
     void login_unverifiedClient_emitsInvalidRecord() {
         User u = user("alice@test.com", Role.CLIENT);
         u.setPassword(encoder.encode("Password1@"));

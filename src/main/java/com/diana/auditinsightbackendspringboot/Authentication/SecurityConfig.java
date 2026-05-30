@@ -1,21 +1,18 @@
 package com.diana.auditinsightbackendspringboot.Authentication;
 
 import com.diana.auditinsightbackendspringboot.Services.CustomOAuth2UserService;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.server.reactive.ServerHttpResponse;
-import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.method.configuration.EnableReactiveMethodSecurity;
 import org.springframework.security.config.annotation.web.reactive.EnableWebFluxSecurity;
 import org.springframework.security.config.web.server.SecurityWebFiltersOrder;
 import org.springframework.security.config.web.server.ServerHttpSecurity;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
-import org.springframework.security.oauth2.client.oidc.userinfo.OidcReactiveOAuth2UserService;
-import org.springframework.security.oauth2.client.oidc.userinfo.OidcUserRequest;
-import org.springframework.security.oauth2.client.userinfo.ReactiveOAuth2UserService;
-import org.springframework.security.oauth2.core.oidc.user.OidcUser;
+import org.springframework.security.oauth2.core.user.OAuth2User;
 import org.springframework.security.web.server.SecurityWebFilterChain;
 import org.springframework.security.web.server.authentication.ServerAuthenticationSuccessHandler;
 import org.springframework.web.cors.CorsConfiguration;
@@ -31,11 +28,14 @@ import java.util.List;
 public class SecurityConfig {
 
     private final JwtFilter jwtFilter;
-    private final CustomOAuth2UserService customOAuth2UserService;
+    private final JwtUtil jwtUtil;
 
-    public SecurityConfig(JwtFilter jwtFilter, CustomOAuth2UserService customOAuth2UserService) {
+    @Value("${oauth2.success.redirect-url}")
+    private String oauth2RedirectUrl;
+
+    public SecurityConfig(JwtFilter jwtFilter, JwtUtil jwtUtil, CustomOAuth2UserService customOAuth2UserService) {
         this.jwtFilter = jwtFilter;
-        this.customOAuth2UserService = customOAuth2UserService;
+        this.jwtUtil = jwtUtil;
     }
 
     @Bean
@@ -62,6 +62,27 @@ public class SecurityConfig {
                 .build();
     }
 
+    /**
+     * Spring Security's oauth2Login() auto-detects CustomOAuth2UserService (which is a
+     * @Service bean typed as ReactiveOAuth2UserService<OAuth2UserRequest, OAuth2User>) and
+     * calls it directly — the principal arrives as DefaultOAuth2User, not DefaultOidcUser.
+     * Casting to OAuth2User (the shared interface) works for all principals (DefaultOAuth2User
+     * and DefaultOidcUser both implement it), and getAttribute("email") is always populated
+     * by Google regardless of whether the OIDC or plain OAuth2 path was taken.
+     */
+    private ServerAuthenticationSuccessHandler oAuth2SuccessHandler() {
+        return (webFilterExchange, authentication) -> {
+            OAuth2User oAuth2User = (OAuth2User) authentication.getPrincipal();
+            String email = oAuth2User.getAttribute("email");
+            String token = jwtUtil.generateToken(email, "CLIENT");
+
+            ServerHttpResponse response = webFilterExchange.getExchange().getResponse();
+            response.setStatusCode(HttpStatus.FOUND);
+            response.getHeaders().setLocation(URI.create(oauth2RedirectUrl + "?token=" + token));
+            return response.setComplete();
+        };
+    }
+
     @Bean
     public PasswordEncoder passwordEncoder() {
         return new BCryptPasswordEncoder();
@@ -79,32 +100,4 @@ public class SecurityConfig {
         source.registerCorsConfiguration("/**", config);
         return source;
     }
-    @Bean
-    public ReactiveOAuth2UserService<OidcUserRequest, OidcUser> oidcUserService(
-            CustomOAuth2UserService customOAuth2UserService) {
-        OidcReactiveOAuth2UserService oidcService = new OidcReactiveOAuth2UserService();
-        oidcService.setOauth2UserService(customOAuth2UserService);
-        return oidcService;
-    }
-
-    @Bean
-    public ServerAuthenticationSuccessHandler oAuth2SuccessHandler(JwtUtil jwtUtil) {
-        return (webFilterExchange, authentication) -> {
-            OidcUser oidcUser = (OidcUser) authentication.getPrincipal();
-            assert oidcUser != null;
-            String email = oidcUser.getEmail();
-
-            // Generate your JWT here using your existing JwtService
-            String token = jwtUtil.generateToken(email , );
-
-            ServerHttpResponse response = webFilterExchange.getExchange().getResponse();
-            response.setStatusCode(HttpStatus.FOUND);
-            response.getHeaders().setLocation(
-                    URI.create("http://localhost:3000/oauth2/callback?token=" + token)
-            );
-            return response.setComplete();
-        };
-    }
-
-
 }

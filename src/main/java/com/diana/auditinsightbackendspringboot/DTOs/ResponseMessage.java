@@ -10,6 +10,6 @@ import org.springframework.http.HttpStatus;
 @NoArgsConstructor
 @Data
 public class ResponseMessage {
-    private HttpStatus Status;
-    private String Message;
+    private HttpStatus status;
+    private String message;
 }
