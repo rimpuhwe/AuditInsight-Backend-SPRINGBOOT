@@ -7,6 +7,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Mono;
@@ -15,6 +16,7 @@ import reactor.core.publisher.Mono;
 @RequestMapping("/api/auditor")
 @Tag(name = "Auditor Profile", description = "Profile management for authenticated auditors")
 @SecurityRequirement(name = "bearerAuth")
+@PreAuthorize("hasRole('AUDITOR')")
 public class AuditorProfileController {
 
     private final AuditorProfileService auditorProfileService;

@@ -4,6 +4,7 @@ import com.diana.auditinsightbackendspringboot.Services.CustomOAuth2UserService;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.server.reactive.ServerHttpResponse;
 import org.springframework.security.config.annotation.method.configuration.EnableReactiveMethodSecurity;
@@ -53,6 +54,9 @@ public class SecurityConfig {
                                 "/v3/api-docs/**",
                                 "/webjars/**"
                         ).permitAll()
+                        .pathMatchers("/api/admin/**").hasRole("ADMIN")
+                        .pathMatchers("/api/auditor/**").hasRole("AUDITOR")
+                        .pathMatchers("/api/client/**").hasRole("CLIENT")
                         .anyExchange().authenticated()
                 )
                 .oauth2Login(oauth2 -> oauth2

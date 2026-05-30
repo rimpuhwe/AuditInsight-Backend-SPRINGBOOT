@@ -82,6 +82,26 @@ public class EmailService {
         sendEmail(email, "Your OTP for AuditInsight Account Verification", html);
     }
 
+    public void sendApprovalEmail(String email, String name) {
+        if (email == null || name == null) {
+            log.error("Cannot send approval email: missing email or name");
+            return;
+        }
+
+        String html = String.format("""
+                <html>
+                  <body style='font-family: Arial, sans-serif;'>
+                      <p>Hello <b>%s</b>,</p>
+                      <p>Great news! Your <b>AuditInsight</b> auditor account has been reviewed and approved.</p>
+                      <p>You can now log in and start working on auditing engagements.</p>
+                      <br>
+                      <p>Welcome aboard!</p>
+                  </body>
+                </html>""", name);
+
+        sendEmail(email, "Your AuditInsight Account Has Been Approved", html);
+    }
+
     public void sendConfirmationEmail(String email, String name) {
         if (email == null || name == null) {
             log.error("Cannot send confirmation email: missing email or name");

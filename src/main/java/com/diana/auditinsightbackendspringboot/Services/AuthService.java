@@ -92,42 +92,47 @@ public class AuthService {
     public Mono<LoginMessage> login(LoginRequest request) {
         return repo.findByUsername(request.getUsername())
                 .switchIfEmpty(Mono.error(new InvalidRecord("Username not found")))
-                .flatMap(user -> {
-                    if (!"JWT".equals(user.getAuthProvider())) {
-                        return Mono.error(new InvalidRecord(
-                                "This account uses social login. Please sign in with " + user.getAuthProvider() + "."));
-                    }
-                    if (!encoder.matches(request.getPassword(), user.getPassword())) {
-                        return Mono.error(new InvalidRecord("Invalid credentials"));
-                    }
-
-                    if (user.getRole() == Role.CLIENT) {
-                        return otpVerificationRepository.findByEmail(user.getUsername())
-                                .switchIfEmpty(Mono.error(new InvalidRecord(
-                                        "Your account is not active. Please verify your email using the OTP.")))
-                                .flatMap(otp -> {
-                                    if (!otp.isVerified()) {
-                                        // BUG FIX: tell the user whether OTP has expired so they know to request a new one
-                                        if (otp.getExpiry().isBefore(LocalDateTime.now())) {
-                                            return Mono.error(new InvalidRecord(
-                                                    "Your OTP has expired. Please request a new one."));
-                                        }
-                                        return Mono.error(new InvalidRecord(
-                                                "Your account is not active. Please verify your email using the OTP."));
-                                    }
-                                    return generateTokenResponse(user);
-                                });
-                    } else if (user.getRole() == Role.AUDITOR) {
-                        if (!user.isVerified()) {
-                            return Mono.error(new InvalidRecord("Your account is waiting for admin approval."));
-                        }
-                        return generateTokenResponse(user);
-                    }
-
-                    return Mono.error(new InvalidRecord("Unknown user role"));
-                });
+                .flatMap(this::validateAuthProvider)
+                .flatMap(user -> validatePassword(user, request.getPassword()))
+                .flatMap(this::validateRoleAccess)
+                .flatMap(this::generateTokenResponse);
     }
 
+    private Mono<User> validateAuthProvider(User user) {
+        if (!"JWT".equals(user.getAuthProvider())) {
+            return Mono.error(new InvalidRecord(
+                    "This account uses social login. Please sign in with " + user.getAuthProvider() + "."));
+        }
+        return Mono.just(user);
+    }
+
+    private Mono<User> validatePassword(User user, String rawPassword) {
+        if (!encoder.matches(rawPassword, user.getPassword())) {
+            return Mono.error(new InvalidRecord("Invalid credentials"));
+        }
+        return Mono.just(user);
+    }
+
+    private Mono<User> validateRoleAccess(User user) {
+        return switch (user.getRole()) {
+            case CLIENT -> otpVerificationRepository.findByEmail(user.getUsername())
+                    .switchIfEmpty(Mono.error(new InvalidRecord(
+                            "Your account is not active. Please verify your email using the OTP.")))
+                    .flatMap(otp -> {
+                        if (otp.isVerified()) return Mono.just(user);
+                        if (otp.getExpiry().isBefore(LocalDateTime.now())) {
+                            return Mono.error(new InvalidRecord("Your OTP has expired. Please request a new one."));
+                        }
+                        return Mono.error(new InvalidRecord(
+                                "Your account is not active. Please verify your email using the OTP."));
+                    });
+            case AUDITOR -> user.isVerified()
+                    ? Mono.just(user)
+                    : Mono.error(new InvalidRecord("Your account is waiting for admin approval."));
+            case ADMIN -> Mono.just(user);
+            default -> Mono.error(new InvalidRecord("Unknown user role"));
+        };
+    }
     private Mono<LoginMessage> generateTokenResponse(User user) {
         String token = jwtUtil.generateToken(user.getUsername(), user.getRole().name());
         return Mono.just(new LoginMessage(HttpStatus.OK, "Successfully Login", token, user.getRole()));
@@ -163,6 +168,12 @@ public class AuthService {
 
                     otp.setVerified(true);
                     return otpVerificationRepository.save(otp)
+                            .then(repo.findByUsername(otp.getEmail())
+                                    .flatMap(user -> {
+                                        user.setVerified(true);
+                                        return repo.save(user);
+                                    })
+                                    .then())
                             .thenReturn(new ResponseMessage(HttpStatus.OK, "Successfully verified. Account Activated"));
                 });
     }

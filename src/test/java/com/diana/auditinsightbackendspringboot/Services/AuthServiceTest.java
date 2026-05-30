@@ -233,6 +233,23 @@ class AuthServiceTest {
     }
 
     @Test
+    void login_adminUser_returnsToken() {
+        User u = user("admin@test.com", Role.ADMIN);
+        u.setPassword(encoder.encode("AdminPass1@"));
+        when(userRepository.findByUsername("admin@test.com")).thenReturn(Mono.just(u));
+        when(jwtUtil.generateToken(anyString(), anyString())).thenReturn("admin.jwt.token");
+
+        LoginRequest req = new LoginRequest();
+        req.setUsername("admin@test.com");
+        req.setPassword("AdminPass1@");
+
+        StepVerifier.create(authService.login(req))
+                .expectNextMatches(r -> r.getRole() == Role.ADMIN
+                        && r.getToken().equals("admin.jwt.token"))
+                .verifyComplete();
+    }
+
+    @Test
     void login_approvedAuditor_returnsToken() {
         User u = user("bob@test.com", Role.AUDITOR);
         u.setPassword(encoder.encode("Password1@"));
@@ -261,9 +278,13 @@ class AuthServiceTest {
         otp.setExpiry(LocalDateTime.now().plusMinutes(5));
 
         when(otpRepository.findByEmailAndOtp("alice@test.com", "123456")).thenReturn(Mono.just(otp));
-        OtpVerification verified = new OtpVerification();
-        verified.setVerified(true);
-        when(otpRepository.save(any())).thenReturn(Mono.just(verified));
+        OtpVerification verifiedOtp = new OtpVerification();
+        verifiedOtp.setVerified(true);
+        when(otpRepository.save(any())).thenReturn(Mono.just(verifiedOtp));
+
+        User u = user("alice@test.com", Role.CLIENT);
+        when(userRepository.findByUsername("alice@test.com")).thenReturn(Mono.just(u));
+        when(userRepository.save(any())).thenReturn(Mono.just(u));
 
         OtpRequest req = new OtpRequest();
         req.setEmail("alice@test.com");

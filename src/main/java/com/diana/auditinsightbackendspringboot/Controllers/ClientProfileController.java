@@ -7,6 +7,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Mono;
@@ -24,6 +25,7 @@ public class ClientProfileController {
     }
 
     @GetMapping("/profile")
+    @PreAuthorize("hasRole('CLIENT')")
     @Operation(summary = "Get my profile", description = "Returns the profile of the currently authenticated client")
     public Mono<ResponseEntity<ClientProfile>> getProfile(Authentication authentication) {
         return clientProfileService.getProfile(authentication.getName())
@@ -31,6 +33,7 @@ public class ClientProfileController {
     }
 
     @PatchMapping("/profile")
+    @PreAuthorize("hasRole('CLIENT')")
     @Operation(summary = "Complete my profile", description = "Partially updates phone, address, company name, or name for the authenticated client")
     public Mono<ResponseEntity<ClientProfile>> updateProfile(
             Authentication authentication,
