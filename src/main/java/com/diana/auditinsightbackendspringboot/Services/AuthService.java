@@ -2,6 +2,8 @@ package com.diana.auditinsightbackendspringboot.Services;
 
 import com.diana.auditinsightbackendspringboot.Authentication.JwtUtil;
 import com.diana.auditinsightbackendspringboot.DTOs.*;
+import com.diana.auditinsightbackendspringboot.Enum.InvitationStatus;
+import com.diana.auditinsightbackendspringboot.Enum.MemberStatus;
 import com.diana.auditinsightbackendspringboot.Enum.Role;
 import com.diana.auditinsightbackendspringboot.Exceptions.Custom.InvalidRecord;
 import com.diana.auditinsightbackendspringboot.Models.*;
@@ -25,10 +27,14 @@ public class AuthService {
     private final AuditorRepository auditorRepository;
     private final EmailService emailService;
     private final OtpRepository otpVerificationRepository;
+    private final OrganisationInvitationRepository invitationRepo;
+    private final OrganisationMemberRepository memberRepo;
 
     public AuthService(UserRepository repo, PasswordEncoder encoder, JwtUtil jwtUtil,
                        ClientRepository clientRepository, AuditorRepository auditorRepository,
-                       EmailService emailService, OtpRepository otpVerificationRepository) {
+                       EmailService emailService, OtpRepository otpVerificationRepository,
+                       OrganisationInvitationRepository invitationRepo,
+                       OrganisationMemberRepository memberRepo) {
         this.repo = repo;
         this.encoder = encoder;
         this.jwtUtil = jwtUtil;
@@ -36,9 +42,20 @@ public class AuthService {
         this.auditorRepository = auditorRepository;
         this.emailService = emailService;
         this.otpVerificationRepository = otpVerificationRepository;
+        this.invitationRepo = invitationRepo;
+        this.memberRepo = memberRepo;
     }
 
     public Mono<ResponseMessage> registerUser(UserRegister request) {
+        if (request.getRole() == Role.MEMBER) {
+            return Mono.just(new ResponseMessage(HttpStatus.FORBIDDEN,
+                    "Member accounts can only be created through organisation invitation"));
+        }
+        if (request.getRole() == Role.ADMIN) {
+            return Mono.just(new ResponseMessage(HttpStatus.FORBIDDEN,
+                    "Admin accounts cannot be self-registered"));
+        }
+
         return repo.existsByUsername(request.getUsername())
                 .flatMap(exists -> {
                     if (exists) {
@@ -53,7 +70,6 @@ public class AuthService {
                     user.setAuthProvider("JWT");
 
                     return repo.save(user).flatMap(savedUser -> {
-
                         if (savedUser.getRole() == Role.CLIENT) {
                             ClientProfile profile = new ClientProfile();
                             profile.setFirstName(request.getFirstName().trim());
@@ -95,7 +111,92 @@ public class AuthService {
                 .flatMap(this::validateAuthProvider)
                 .flatMap(user -> validatePassword(user, request.getPassword()))
                 .flatMap(this::validateRoleAccess)
+                .flatMap(user -> processInviteToken(user, request.getInviteToken()))
                 .flatMap(this::generateTokenResponse);
+    }
+
+    /**
+     * Validates the invitation token at login time.
+     *
+     * Rules:
+     * - If mustChangePassword=true (first login): token is REQUIRED.
+     * - If token is provided (any login): validate it and activate the specific org membership.
+     * - Expired token → access denied, invitation marked EXPIRED.
+     * - On successful activation: org_member status PENDING → ACTIVE; password-change email sent.
+     */
+    private Mono<User> processInviteToken(User user, String inviteToken) {
+        boolean hasToken = inviteToken != null && !inviteToken.isBlank();
+
+        if (!hasToken && !user.isMustChangePassword()) {
+            return Mono.just(user);
+        }
+
+        if (!hasToken) {
+            return Mono.error(new InvalidRecord(
+                    "An invitation token is required for your first login. Please use the link from your invitation email."));
+        }
+
+        return invitationRepo.findByToken(inviteToken)
+                .switchIfEmpty(Mono.error(new InvalidRecord(
+                        "Invitation not found. Please check your invitation email or contact the organisation owner.")))
+                .flatMap(inv -> {
+                    if (!inv.getInvitedEmail().equalsIgnoreCase(user.getUsername())) {
+                        return Mono.error(new InvalidRecord(
+                                "This invitation does not belong to your account."));
+                    }
+                    if (inv.getStatus() == InvitationStatus.REVOKED) {
+                        return Mono.error(new InvalidRecord(
+                                "This invitation has been revoked. Please contact the organisation owner."));
+                    }
+                    if (inv.getStatus() == InvitationStatus.ACCEPTED) {
+                        return Mono.error(new InvalidRecord(
+                                "This invitation has already been accepted."));
+                    }
+                    if (inv.getStatus() == InvitationStatus.EXPIRED
+                            || inv.getExpiresAt().isBefore(LocalDateTime.now())) {
+                        inv.setStatus(InvitationStatus.EXPIRED);
+                        return invitationRepo.save(inv)
+                                .then(Mono.error(new InvalidRecord(
+                                        "Your invitation has expired. Please contact the organisation owner for a new invitation.")));
+                    }
+
+                    // Valid PENDING invitation — accept it and activate the specific org membership.
+                    inv.setStatus(InvitationStatus.ACCEPTED);
+                    boolean isFirstLogin = user.isMustChangePassword();
+
+                    return invitationRepo.save(inv)
+                            .then(memberRepo.findByOrganisationIdAndUserId(inv.getOrganisationId(), user.getId()))
+                            .switchIfEmpty(Mono.error(new InvalidRecord(
+                                    "Organisation membership record not found. Please contact the organisation owner.")))
+                            .flatMap(member -> {
+                                member.setStatus(MemberStatus.ACTIVE);
+                                return memberRepo.save(member);
+                            })
+                            .then(isFirstLogin
+                                    ? Mono.fromRunnable(() ->
+                                            emailService.sendPasswordChangeReminderEmail(
+                                                    user.getUsername(), user.getFullName()))
+                                            .subscribeOn(Schedulers.boundedElastic())
+                                            .thenReturn(user)
+                                    : Mono.just(user));
+                });
+    }
+
+    public Mono<ResponseMessage> changePassword(String email, ChangePasswordRequest request) {
+        return repo.findByUsername(email)
+                .switchIfEmpty(Mono.error(new InvalidRecord("User not found")))
+                .flatMap(user -> {
+                    if (!encoder.matches(request.getCurrentPassword(), user.getPassword())) {
+                        return Mono.error(new InvalidRecord("Current password is incorrect"));
+                    }
+                    user.setPassword(encoder.encode(request.getNewPassword()));
+                    user.setMustChangePassword(false);
+                    return repo.save(user)
+                            .then(Mono.fromRunnable(() ->
+                                    emailService.sendPasswordChangedEmail(user.getUsername(), user.getFullName()))
+                                    .subscribeOn(Schedulers.boundedElastic()))
+                            .thenReturn(new ResponseMessage(HttpStatus.OK, "Password changed successfully"));
+                });
     }
 
     private Mono<User> validateAuthProvider(User user) {
@@ -130,18 +231,19 @@ public class AuthService {
                     ? Mono.just(user)
                     : Mono.error(new InvalidRecord("Your account is waiting for admin approval."));
             case ADMIN -> Mono.just(user);
+            // MEMBER accounts are created by invitation with verified=true — no extra check needed.
+            case MEMBER -> Mono.just(user);
             default -> Mono.error(new InvalidRecord("Unknown user role"));
         };
     }
+
     private Mono<LoginMessage> generateTokenResponse(User user) {
         String token = jwtUtil.generateToken(user.getUsername(), user.getRole().name());
-        return Mono.just(new LoginMessage(HttpStatus.OK, "Successfully Login", token, user.getRole()));
+        return Mono.just(new LoginMessage(HttpStatus.OK, "Successfully Login", token,
+                user.getRole(), user.isMustChangePassword()));
     }
 
-    // BUG FIX: delete any existing OTP
-    // for this email before saving a new one.
-    // Without this, a user requesting a new OTP ends up with multiple OTP rows, and
-    // findByEmail returns an unpredictable one — making resend/re-verify unreliable.
+    // BUG FIX: delete any existing OTP for this email before saving a new one.
     private Mono<String> generateOtp(String email) {
         int otpCode = 100000 + new Random().nextInt(900000);
         OtpVerification otp = new OtpVerification();
@@ -178,7 +280,7 @@ public class AuthService {
                 });
     }
 
-    // BUG FIX: expose a resend OTP endpoint method so users who let their OTP expire aren't locked out
+    // BUG FIX: expose a resend OTP endpoint so users who let their OTP expire aren't locked out
     public Mono<ResponseMessage> resendOtp(String email) {
         return repo.findByUsername(email)
                 .switchIfEmpty(Mono.error(new InvalidRecord("No account found for this email.")))

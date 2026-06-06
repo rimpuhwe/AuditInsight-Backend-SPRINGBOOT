@@ -34,6 +34,9 @@ public class User {
 
     private boolean verified = false;
 
+    @Column("must_change_password")
+    private boolean mustChangePassword = false;
+
     @Column("created_at")
     private LocalDateTime createdAt = LocalDateTime.now();
 }

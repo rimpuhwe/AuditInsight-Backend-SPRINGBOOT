@@ -15,4 +15,5 @@ public class LoginMessage {
     private String message;
     private String token;
     private Role role;
+    private boolean mustChangePassword;
 }

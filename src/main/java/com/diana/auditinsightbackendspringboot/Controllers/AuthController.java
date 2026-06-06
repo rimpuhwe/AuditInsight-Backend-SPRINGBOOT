@@ -3,15 +3,16 @@ package com.diana.auditinsightbackendspringboot.Controllers;
 import com.diana.auditinsightbackendspringboot.DTOs.*;
 import com.diana.auditinsightbackendspringboot.Services.AuthService;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.server.reactive.ServerHttpResponse;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Mono;
 
-import java.io.IOException;
 import java.net.URI;
 
 @RestController
@@ -66,6 +67,19 @@ public class AuthController {
         return authService.resendOtp(email)
                 .map(response -> new ResponseEntity<>(response, HttpStatus.OK));
     }
+    @PatchMapping("/change-password")
+    @Operation(
+            summary = "Change password (forced on first login)",
+            description = "Required for invited members on their first login. Clears the mustChangePassword flag after success.",
+            security = @SecurityRequirement(name = "bearerAuth")
+    )
+    public Mono<ResponseEntity<ResponseMessage>> changePassword(
+            Authentication authentication,
+            @Valid @RequestBody ChangePasswordRequest request) {
+        return authService.changePassword(authentication.getName(), request)
+                .map(response -> new ResponseEntity<>(response, HttpStatus.OK));
+    }
+
     @GetMapping("/social-login/{provider}")
     @Operation(
             summary = "Social login redirect",

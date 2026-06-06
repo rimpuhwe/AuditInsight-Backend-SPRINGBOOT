@@ -107,7 +107,7 @@ class AuthControllerTest {
     @Test
     void login_validCredentials_returns200WithToken() {
         when(authService.login(any())).thenReturn(
-                Mono.just(new LoginMessage(HttpStatus.OK, "Successfully Login", "jwt.token.here", Role.CLIENT)));
+                Mono.just(new LoginMessage(HttpStatus.OK, "Successfully Login", "jwt.token.here", Role.CLIENT, false)));
 
         webTestClient.post().uri("/api/auth/login")
                 .contentType(MediaType.APPLICATION_JSON)

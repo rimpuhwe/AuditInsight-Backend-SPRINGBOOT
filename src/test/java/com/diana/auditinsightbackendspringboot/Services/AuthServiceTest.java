@@ -17,10 +17,16 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import com.diana.auditinsightbackendspringboot.Enum.InvitationStatus;
+import com.diana.auditinsightbackendspringboot.Enum.MemberStatus;
+import com.diana.auditinsightbackendspringboot.Models.OrganisationInvitation;
+import com.diana.auditinsightbackendspringboot.Models.OrganisationMember;
+import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
 
 import java.time.LocalDateTime;
+import java.util.UUID;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -35,6 +41,8 @@ class AuthServiceTest {
     @Mock private EmailService emailService;
     @Mock private OtpRepository otpRepository;
     @Mock private JwtUtil jwtUtil;
+    @Mock private OrganisationInvitationRepository invitationRepository;
+    @Mock private OrganisationMemberRepository memberRepository;
 
     private AuthService authService;
     private final PasswordEncoder encoder = new BCryptPasswordEncoder();
@@ -44,7 +52,8 @@ class AuthServiceTest {
         authService = new AuthService(
                 userRepository, encoder, jwtUtil,
                 clientRepository, auditorRepository,
-                emailService, otpRepository
+                emailService, otpRepository,
+                invitationRepository, memberRepository
         );
     }
 
@@ -68,11 +77,24 @@ class AuthServiceTest {
         otp.setExpiry(LocalDateTime.now().plusMinutes(10));
         when(otpRepository.save(any())).thenReturn(Mono.just(otp));
 
-        UserRegister req = clientRegisterRequest("alice@test.com");
-
-        StepVerifier.create(authService.registerUser(req))
+        StepVerifier.create(authService.registerUser(clientRegisterRequest("alice@test.com")))
                 .expectNextMatches(r -> r.getStatus() == HttpStatus.CREATED
                         && r.getMessage().contains("OTP"))
+                .verifyComplete();
+    }
+
+    @Test
+    void registerUser_memberRole_returnsForbidden() {
+        UserRegister req = new UserRegister();
+        req.setFirstName("Eve");
+        req.setLastName("Doe");
+        req.setUsername("eve@test.com");
+        req.setPassword("Password1@");
+        req.setRole(Role.MEMBER);
+
+        StepVerifier.create(authService.registerUser(req))
+                .expectNextMatches(r -> r.getStatus() == HttpStatus.FORBIDDEN
+                        && r.getMessage().contains("invitation"))
                 .verifyComplete();
     }
 
@@ -96,9 +118,7 @@ class AuthServiceTest {
         AuditorProfile savedProfile = new AuditorProfile();
         when(auditorRepository.save(any())).thenReturn(Mono.just(savedProfile));
 
-        UserRegister req = auditorRegisterRequest("bob@test.com");
-
-        StepVerifier.create(authService.registerUser(req))
+        StepVerifier.create(authService.registerUser(auditorRegisterRequest("bob@test.com")))
                 .expectNextMatches(r -> r.getStatus() == HttpStatus.CREATED
                         && r.getMessage().contains("confirmation"))
                 .verifyComplete();
@@ -123,8 +143,90 @@ class AuthServiceTest {
 
         StepVerifier.create(authService.login(req))
                 .expectNextMatches(r -> r.getToken().equals("mocked.jwt.token")
-                        && r.getRole() == Role.CLIENT)
+                        && r.getRole() == Role.CLIENT
+                        && !r.isMustChangePassword())
                 .verifyComplete();
+    }
+
+    @Test
+    void login_invitedMember_withValidToken_activatesMembershipAndReturnsMustChangePassword() {
+        UUID orgId = UUID.randomUUID();
+        String token = "valid-invite-token";
+
+        User u = user("eve@test.com", Role.MEMBER);
+        u.setPassword(encoder.encode("TempPass1@"));
+        u.setVerified(true);
+        u.setMustChangePassword(true);
+        when(userRepository.findByUsername("eve@test.com")).thenReturn(Mono.just(u));
+
+        OrganisationInvitation inv = invitation(orgId, "eve@test.com", token, InvitationStatus.PENDING,
+                LocalDateTime.now().plusHours(48));
+        when(invitationRepository.findByToken(token)).thenReturn(Mono.just(inv));
+        when(invitationRepository.save(any())).thenReturn(Mono.just(inv));
+
+        OrganisationMember member = new OrganisationMember();
+        member.setStatus(MemberStatus.PENDING);
+        when(memberRepository.findByOrganisationIdAndUserId(orgId, null)).thenReturn(Mono.just(member));
+        when(memberRepository.save(any())).thenReturn(Mono.just(member));
+
+        when(jwtUtil.generateToken(anyString(), anyString())).thenReturn("member.jwt.token");
+
+        LoginRequest req = new LoginRequest();
+        req.setUsername("eve@test.com");
+        req.setPassword("TempPass1@");
+        req.setInviteToken(token);
+
+        StepVerifier.create(authService.login(req))
+                .expectNextMatches(r -> r.getToken().equals("member.jwt.token")
+                        && r.getRole() == Role.MEMBER
+                        && r.isMustChangePassword())
+                .verifyComplete();
+    }
+
+    @Test
+    void login_invitedMember_withoutToken_returnsError() {
+        User u = user("eve@test.com", Role.MEMBER);
+        u.setPassword(encoder.encode("TempPass1@"));
+        u.setVerified(true);
+        u.setMustChangePassword(true);
+        when(userRepository.findByUsername("eve@test.com")).thenReturn(Mono.just(u));
+
+        LoginRequest req = new LoginRequest();
+        req.setUsername("eve@test.com");
+        req.setPassword("TempPass1@");
+        // no inviteToken
+
+        StepVerifier.create(authService.login(req))
+                .expectErrorMatches(e -> e instanceof InvalidRecord
+                        && e.getMessage().contains("invitation token is required"))
+                .verify();
+    }
+
+    @Test
+    void login_invitedMember_withExpiredToken_returnsError() {
+        UUID orgId = UUID.randomUUID();
+        String token = "expired-token";
+
+        User u = user("eve@test.com", Role.MEMBER);
+        u.setPassword(encoder.encode("TempPass1@"));
+        u.setVerified(true);
+        u.setMustChangePassword(true);
+        when(userRepository.findByUsername("eve@test.com")).thenReturn(Mono.just(u));
+
+        OrganisationInvitation inv = invitation(orgId, "eve@test.com", token, InvitationStatus.PENDING,
+                LocalDateTime.now().minusHours(1)); // already expired
+        when(invitationRepository.findByToken(token)).thenReturn(Mono.just(inv));
+        when(invitationRepository.save(any())).thenReturn(Mono.just(inv));
+
+        LoginRequest req = new LoginRequest();
+        req.setUsername("eve@test.com");
+        req.setPassword("TempPass1@");
+        req.setInviteToken(token);
+
+        StepVerifier.create(authService.login(req))
+                .expectErrorMatches(e -> e instanceof InvalidRecord
+                        && e.getMessage().contains("expired"))
+                .verify();
     }
 
     @Test
@@ -202,7 +304,7 @@ class AuthServiceTest {
 
         OtpVerification otp = new OtpVerification();
         otp.setVerified(false);
-        otp.setExpiry(LocalDateTime.now().minusMinutes(1)); // already expired
+        otp.setExpiry(LocalDateTime.now().minusMinutes(1));
         when(otpRepository.findByEmail("alice@test.com")).thenReturn(Mono.just(otp));
 
         LoginRequest req = new LoginRequest();
@@ -413,6 +515,18 @@ class AuthServiceTest {
         u.setRole(role);
         u.setAuthProvider("JWT");
         return u;
+    }
+
+    private OrganisationInvitation invitation(UUID orgId, String email, String token,
+                                              InvitationStatus status, LocalDateTime expiresAt) {
+        OrganisationInvitation inv = new OrganisationInvitation();
+        inv.setOrganisationId(orgId);
+        inv.setInvitedEmail(email);
+        inv.setToken(token);
+        inv.setStatus(status);
+        inv.setExpiresAt(expiresAt);
+        inv.setCreatedAt(LocalDateTime.now());
+        return inv;
     }
 
     private UserRegister clientRegisterRequest(String email) {

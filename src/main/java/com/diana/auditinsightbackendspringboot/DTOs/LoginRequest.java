@@ -16,4 +16,7 @@ public class LoginRequest {
     @Pattern(message = "the password should be valid ", regexp = "^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)(?=.*[@$!%*?&])[A-Za-z\\d@$!%*?&]{8,}$")
     @NotBlank(message = "this field can not be empty")
     private String password;
+
+    // Required on first login for invited users; optional for subsequent logins activating additional org memberships
+    private String inviteToken;
 }

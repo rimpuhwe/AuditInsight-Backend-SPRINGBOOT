@@ -102,6 +102,163 @@ public class EmailService {
         sendEmail(email, "Your AuditInsight Account Has Been Approved", html);
     }
 
+    public void sendInvitationEmail(String email, String orgName, String token) {
+        if (email == null || orgName == null) {
+            log.error("Cannot send invitation email: missing email or orgName");
+            return;
+        }
+        String html = String.format("""
+                <html><body style='font-family:Arial,sans-serif;'>
+                  <div style='max-width:600px;margin:auto;padding:20px;border:1px solid #ddd;'>
+                    <h2>You've been invited to join <b>%s</b> on AuditInsight</h2>
+                    <p>Click the link below to register and join the organisation:</p>
+                    <p><a href='http://localhost:8080/register?inviteToken=%s'
+                          style='background:#4CAF50;color:#fff;padding:10px 20px;
+                                 text-decoration:none;border-radius:4px;'>
+                      Accept Invitation
+                    </a></p>
+                    <p>This invitation expires in 72 hours.</p>
+                    <small>If you did not expect this, please ignore this email.</small>
+                  </div>
+                </body></html>""", orgName, token);
+        sendEmail(email, "You're invited to join " + orgName + " on AuditInsight", html);
+    }
+
+    public void sendAddedToOrgEmail(String email, String name, String orgName, String role) {
+        if (email == null || orgName == null) {
+            log.error("Cannot send org-added email: missing email or orgName");
+            return;
+        }
+        String html = String.format("""
+                <html><body style='font-family:Arial,sans-serif;'>
+                  <div style='max-width:600px;margin:auto;padding:20px;border:1px solid #ddd;'>
+                    <h2>You've been added to <b>%s</b></h2>
+                    <p>Hello <b>%s</b>,</p>
+                    <p>You have been added to the organisation <b>%s</b> on AuditInsight
+                       as a <b>%s</b>.</p>
+                    <p>Log in to AuditInsight to get started.</p>
+                  </div>
+                </body></html>""", orgName, name, orgName, role);
+        sendEmail(email, "You've been added to " + orgName + " on AuditInsight", html);
+    }
+
+    public void sendMemberCredentialsEmail(String email, String defaultPassword,
+                                           String orgName, String role, String token) {
+        if (email == null || orgName == null) {
+            log.error("Cannot send credentials email: missing email or orgName");
+            return;
+        }
+        String html = String.format("""
+                <html><body style='font-family:Arial,sans-serif;'>
+                  <div style='max-width:600px;margin:auto;padding:20px;border:1px solid #ddd;'>
+                    <h2>You have been invited to join <b>%s</b> on AuditInsight</h2>
+                    <p>Your account has been created. Use the credentials below to log in and activate your membership:</p>
+                    <table style='margin:20px 0;border-collapse:collapse;'>
+                      <tr>
+                        <td style='padding:8px 16px 8px 0;font-weight:bold;'>Username (email):</td>
+                        <td style='padding:8px;background:#f4f4f4;border-radius:4px;'>%s</td>
+                      </tr>
+                      <tr>
+                        <td style='padding:8px 16px 8px 0;font-weight:bold;'>Temporary password:</td>
+                        <td style='padding:8px;background:#f4f4f4;border-radius:4px;letter-spacing:2px;'>%s</td>
+                      </tr>
+                      <tr>
+                        <td style='padding:8px 16px 8px 0;font-weight:bold;'>Your role:</td>
+                        <td style='padding:8px;background:#f4f4f4;border-radius:4px;'>%s</td>
+                      </tr>
+                      <tr>
+                        <td style='padding:8px 16px 8px 0;font-weight:bold;'>Invitation token:</td>
+                        <td style='padding:8px;background:#f4f4f4;border-radius:4px;word-break:break-all;font-family:monospace;'>%s</td>
+                      </tr>
+                    </table>
+                    <p>Log in with the credentials above and enter the invitation token when prompted. This token expires in <b>72 hours</b>.</p>
+                    <p style='color:#e74c3c;font-weight:bold;'>
+                      You will be required to change your password after your first login.
+                    </p>
+                    <small>If you did not expect this invitation, please contact your organisation administrator.</small>
+                  </div>
+                </body></html>""", orgName, email, defaultPassword, role, token);
+        sendEmail(email, "Your AuditInsight account for " + orgName, html);
+    }
+
+    public void sendExistingUserInvitationEmail(String email, String name,
+                                                String orgName, String role, String token) {
+        if (email == null || orgName == null) {
+            log.error("Cannot send invitation email: missing email or orgName");
+            return;
+        }
+        String html = String.format("""
+                <html><body style='font-family:Arial,sans-serif;'>
+                  <div style='max-width:600px;margin:auto;padding:20px;border:1px solid #ddd;'>
+                    <h2>You've been invited to join <b>%s</b> on AuditInsight</h2>
+                    <p>Hello <b>%s</b>,</p>
+                    <p>You have been invited to collaborate on <b>%s</b> as a <b>%s</b>.</p>
+                    <p>Use the invitation token below when logging in to activate your membership. This token expires in <b>72 hours</b>.</p>
+                    <div style='text-align:center;margin:20px;'>
+                      <span style='font-family:monospace;font-size:0.9em;background:#f4f4f4;padding:12px 20px;
+                                   border-radius:5px;border:1px solid #ccc;word-break:break-all;display:inline-block;'>%s</span>
+                    </div>
+                    <small>If you did not expect this, please ignore this email.</small>
+                  </div>
+                </body></html>""", orgName, name, orgName, role, token);
+        sendEmail(email, "You've been invited to join " + orgName + " on AuditInsight", html);
+    }
+
+    public void sendPasswordChangedEmail(String email, String name) {
+        if (email == null) {
+            log.error("Cannot send password changed email: missing email");
+            return;
+        }
+        String html = String.format("""
+                <html><body style='font-family:Arial,sans-serif;'>
+                  <div style='max-width:600px;margin:auto;padding:20px;border:1px solid #ddd;'>
+                    <h2 style='color:#4CAF50;'>Password Changed Successfully</h2>
+                    <p>Hello <b>%s</b>,</p>
+                    <p>Your AuditInsight account password has been changed successfully.</p>
+                    <p>If you did not make this change, please contact support immediately.</p>
+                  </div>
+                </body></html>""", name != null ? name : email);
+        sendEmail(email, "Your AuditInsight password has been changed", html);
+    }
+
+    public void sendOwnershipTransferEmail(String email, String name, String orgName, String newRole) {
+        if (email == null || orgName == null) {
+            log.error("Cannot send ownership transfer email: missing email or orgName");
+            return;
+        }
+        String html = String.format("""
+                <html><body style='font-family:Arial,sans-serif;'>
+                  <div style='max-width:600px;margin:auto;padding:20px;border:1px solid #ddd;'>
+                    <h2>Your role in <b>%s</b> has been updated</h2>
+                    <p>Hello <b>%s</b>,</p>
+                    <p>Your role in the organisation <b>%s</b> on AuditInsight has been updated to <b>%s</b>.</p>
+                    <p>Log in to AuditInsight to continue with your updated access level.</p>
+                  </div>
+                </body></html>""", orgName, name != null ? name : email, orgName, newRole);
+        sendEmail(email, "Your role in " + orgName + " has been updated", html);
+    }
+
+    public void sendPasswordChangeReminderEmail(String email, String name) {
+        if (email == null) {
+            log.error("Cannot send password change reminder: missing email");
+            return;
+        }
+        String html = String.format("""
+                <html><body style='font-family:Arial,sans-serif;'>
+                  <div style='max-width:600px;margin:auto;padding:20px;border:1px solid #ddd;'>
+                    <h2 style='color:#e74c3c;'>Action Required: Change Your Password</h2>
+                    <p>Hello <b>%s</b>,</p>
+                    <p>Your account has been activated. For security reasons, you must change your
+                       temporary password before you can access your organisation.</p>
+                    <p>Please use the <b>Change Password</b> option in AuditInsight to set your new password.</p>
+                    <p>Your new password must contain at least 8 characters including uppercase,
+                       lowercase, a number, and a special character.</p>
+                    <small>If you did not expect this, please contact your organisation administrator.</small>
+                  </div>
+                </body></html>""", name != null ? name : email);
+        sendEmail(email, "Action Required: Change your AuditInsight password", html);
+    }
+
     public void sendConfirmationEmail(String email, String name) {
         if (email == null || name == null) {
             log.error("Cannot send confirmation email: missing email or name");
