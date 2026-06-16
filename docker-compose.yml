@@ -1,50 +1,63 @@
-version: '3.9'
 
 services:
 
   postgres:
     image: postgres:16
     container_name: auditinsight-postgres
-
     environment:
       POSTGRES_DB: AuditInsightDatabase
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-
+      POSTGRES_USER: ${SPRING_DATABASE_USERNAME:-postgres}
+      POSTGRES_PASSWORD: ${SPRING_DATABASE_PASSWORD:-postgres}
     ports:
       - "5432:5432"
-
     volumes:
       - postgres_data:/var/lib/postgresql/data
-
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${SPRING_DATABASE_USERNAME:-postgres} -d AuditInsightDatabase"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   backend:
     build: .
     container_name: auditinsight-backend
-
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8080/actuator/health" ]
+      interval: 30s
+      timeout: 10s
+      retries: 5
     depends_on:
-      - postgres
-
+      postgres:
+        condition: service_healthy
     ports:
-      - "${PORT}:${PORT}"
-
+      - "${PORT:-8080}:${PORT:-8080}"
     environment:
-      SPRING_DATASOURCE_URL: ${SPRING_DATASOURCE_URL_PROD}
-      SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME}
-      SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
+      # R2DBC reactive datasource (matches application.properties: spring.r2dbc.url=${SPRING_DATABASE_URL})
+      SPRING_DATABASE_URL: r2dbc:postgresql://postgres:5432/AuditInsightDatabase
+      SPRING_DATABASE_USERNAME: ${SPRING_DATABASE_USERNAME:-postgres}
+      SPRING_DATABASE_PASSWORD: ${SPRING_DATABASE_PASSWORD:-postgres}
 
+      # Flyway uses blocking JDBC, not R2DBC (matches: spring.flyway.url=${FLYWAY_URL})
+      FLYWAY_URL : jdbc:postgresql://postgres:5432/AuditInsightDatabase
+
+      # JWT
       JWT_SECRET: ${JWT_SECRET}
 
-      SPRING_SECURITY_OAUTH2_CLIENT_REGISTRATION_GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
-      SPRING_SECURITY_OAUTH2_CLIENT_REGISTRATION_GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_ID}
+      # Google OAuth2
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
 
-      BREVO_API: ${BREVO_API}
-      BREVO_MAIL: ${BREVO_MAIL}
+      # Brevo email (matches: BREVO_API=${BREVO_API_KEY}, BREVO_MAIL=${BREVO_SENDER_EMAIL})
+      BREVO_API_KEY: ${BREVO_API_KEY}
+      BREVO_SENDER_EMAIL: ${BREVO_SENDER_EMAIL}
       BREVO_SENDER_NAME: ${BREVO_SENDER_NAME}
 
-      SPRING_PROFILES_ACTIVE: prod
-      PORT: ${PORT}
+      # Cloudinary file storage
+      CLOUDINARY_CLOUD_NAME: ${CLOUDINARY_CLOUD_NAME}
+      CLOUDINARY_API_KEY: ${CLOUDINARY_API_KEY}
+      CLOUDINARY_API_SECRET: ${CLOUDINARY_API_SECRET}
 
+      PORT: ${PORT:-8080}
 
 volumes:
   postgres_data:
