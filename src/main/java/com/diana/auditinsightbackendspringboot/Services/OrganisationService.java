@@ -33,6 +33,7 @@ public class OrganisationService {
     private final SubscriptionRepository subscriptionRepo;
     private final UserRepository userRepo;
     private final ClientRepository clientRepo;
+    private final AuditorRepository auditorRepo;
     private final EmailService emailService;
     private final PasswordEncoder encoder;
 
@@ -44,6 +45,7 @@ public class OrganisationService {
             SubscriptionRepository subscriptionRepo,
             UserRepository userRepo,
             ClientRepository clientRepo,
+            AuditorRepository auditorRepo,
             EmailService emailService,
             PasswordEncoder encoder) {
         this.orgRepo = orgRepo;
@@ -53,6 +55,7 @@ public class OrganisationService {
         this.subscriptionRepo = subscriptionRepo;
         this.userRepo = userRepo;
         this.clientRepo = clientRepo;
+        this.auditorRepo = auditorRepo;
         this.emailService = emailService;
         this.encoder = encoder;
     }
@@ -112,6 +115,17 @@ public class OrganisationService {
 
     private List<String> normaliseCurrencies(List<String> raw) {
         return raw.stream().map(String::toUpperCase).distinct().toList();
+    }
+
+    /** Creates an AuditorProfile stub for the given email if one doesn't already exist. */
+    private Mono<Void> ensureAuditorProfile(String email) {
+        return auditorRepo.findByEmailAddress(email)
+                .switchIfEmpty(Mono.defer(() -> {
+                    AuditorProfile profile = new AuditorProfile();
+                    profile.setEmailAddress(email);
+                    return auditorRepo.save(profile);
+                }))
+                .then();
     }
 
     private String generateDefaultPassword() {
@@ -273,8 +287,8 @@ public class OrganisationService {
             UUID orgId,
             String requesterEmail,
             InviteMemberRequest request) {
-        if (request.getRole() == Role.CLIENT) {
-            return Mono.error(new InvalidRecord("Cannot assign client role via invitation"));
+        if (request.getRole() == Role.CLIENT || request.getRole() == Role.ADMIN) {
+            return Mono.error(new InvalidRecord("Cannot assign this role via invitation"));
         }
 
         return getUser(requesterEmail)
@@ -286,7 +300,6 @@ public class OrganisationService {
                                         .switchIfEmpty(Mono.error(new InvalidRecord("Organisation not found")))
                                         .flatMap(org ->
                                                 userRepo.findByUsername(request.getEmail())
-                                                        // PATH A: existing account — PENDING until token-validated login
                                                         .flatMap(existingUser ->
                                                                 memberRepo.findByOrganisationIdAndUserId(orgId, existingUser.getId())
                                                                         .flatMap(existing -> Mono.<ResponseMessage>error(
@@ -306,13 +319,19 @@ public class OrganisationService {
                                                                                     request.getRole(), token,
                                                                                     requesterProfile.getId());
 
-                                                                            return memberRepo.save(member)
+                                                                            Mono<Void> ensureProfile = request.getRole() == Role.AUDITOR
+                                                                                    ? ensureAuditorProfile(request.getEmail())
+                                                                                    : Mono.empty();
+
+                                                                            return ensureProfile
+                                                                                    .then(memberRepo.save(member))
                                                                                     .then(invitationRepo.save(inv))
                                                                                     .then(Mono.fromRunnable(() ->
                                                                                             emailService.sendExistingUserInvitationEmail(
                                                                                                     existingUser.getUsername(),
                                                                                                     existingUser.getFullName(),
                                                                                                     org.getName(),
+                                                                                                    orgId,
                                                                                                     request.getRole().name(),
                                                                                                     token))
                                                                                             .subscribeOn(Schedulers.boundedElastic()))
@@ -320,7 +339,6 @@ public class OrganisationService {
                                                                                             "Invitation sent successfully"));
                                                                         }))
                                                         )
-                                                        // PATH B: new user — create account + send credentials with token
                                                         .switchIfEmpty(Mono.defer(() -> {
                                                             String defaultPassword = generateDefaultPassword();
                                                             String token = UUID.randomUUID().toString();
@@ -349,7 +367,12 @@ public class OrganisationService {
                                                                                 request.getRole(), token,
                                                                                 requesterProfile.getId());
 
-                                                                        return memberRepo.save(member)
+                                                                        Mono<Void> ensureProfile = request.getRole() == Role.AUDITOR
+                                                                                ? ensureAuditorProfile(request.getEmail())
+                                                                                : Mono.empty();
+
+                                                                        return ensureProfile
+                                                                                .then(memberRepo.save(member))
                                                                                 .then(invitationRepo.save(inv))
                                                                                 .then(Mono.fromRunnable(() ->
                                                                                         emailService.sendMemberCredentialsEmail(
