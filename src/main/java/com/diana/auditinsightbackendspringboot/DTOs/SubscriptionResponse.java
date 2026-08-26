@@ -1,8 +1,7 @@
 package com.diana.auditinsightbackendspringboot.DTOs;
 
-import com.diana.auditinsightbackendspringboot.Enum.BillingCycle;
-import com.diana.auditinsightbackendspringboot.Enum.PlanTier;
 import com.diana.auditinsightbackendspringboot.Enum.SubscriptionStatus;
+import com.diana.auditinsightbackendspringboot.Enum.SubscriptionType;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import lombok.Getter;
 import lombok.Setter;
@@ -16,8 +15,7 @@ import java.util.UUID;
 public class SubscriptionResponse {
     private UUID id;
     private UUID organisationId;
-    private PlanTier planTier;
-    private BillingCycle billingCycle;
+    private SubscriptionType subscriptionType;
     private SubscriptionStatus status;
     private LocalDateTime startDate;
     private LocalDateTime endDate;

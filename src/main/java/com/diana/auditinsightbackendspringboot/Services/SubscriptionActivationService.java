@@ -1,6 +1,5 @@
 package com.diana.auditinsightbackendspringboot.Services;
 
-import com.diana.auditinsightbackendspringboot.Enum.BillingCycle;
 import com.diana.auditinsightbackendspringboot.Enum.SubscriptionStatus;
 import com.diana.auditinsightbackendspringboot.Exceptions.Custom.InvalidRecord;
 import com.diana.auditinsightbackendspringboot.Models.Payment;
@@ -52,6 +51,12 @@ public class SubscriptionActivationService {
                                 .flatMap(p -> subscriptionRepository.findById(p.getSubscriptionId())));
     }
 
+    /**
+     * A paid activation only ever extends the org's current row when that row is itself an
+     * ACTIVE paid subscription (so renewing before expiry keeps remaining time, per the
+     * newStartDate=currentExpiry rule). A TRIAL, EXPIRED, or absent row always starts a fresh
+     * paid subscription rather than trying to "extend" something that was never a paid period.
+     */
     private Mono<Subscription> resolveSubscription(Payment payment) {
         return subscriptionRepository.findByOrganisationIdAndStatus(payment.getOrganisationId(), SubscriptionStatus.ACTIVE)
                 .flatMap(existing -> extendExisting(existing, payment))
@@ -63,9 +68,8 @@ public class SubscriptionActivationService {
         LocalDateTime base = existing.getEndDate() != null && existing.getEndDate().isAfter(now)
                 ? existing.getEndDate() : now;
 
-        existing.setPlanTier(payment.getPlanTier());
-        existing.setBillingCycle(payment.getBillingCycle());
-        existing.setEndDate(addCycle(base, payment.getBillingCycle()));
+        existing.setSubscriptionType(payment.getSubscriptionType());
+        existing.setEndDate(addCycle(base, payment));
         existing.setUpdatedAt(now);
         return subscriptionRepository.save(existing);
     }
@@ -75,18 +79,17 @@ public class SubscriptionActivationService {
 
         Subscription subscription = new Subscription();
         subscription.setOrganisationId(payment.getOrganisationId());
-        subscription.setPlanTier(payment.getPlanTier());
-        subscription.setBillingCycle(payment.getBillingCycle());
+        subscription.setSubscriptionType(payment.getSubscriptionType());
         subscription.setStatus(SubscriptionStatus.ACTIVE);
         subscription.setStartDate(now);
-        subscription.setEndDate(addCycle(now, payment.getBillingCycle()));
+        subscription.setEndDate(addCycle(now, payment));
         subscription.setCreatedBy(payment.getCreatedBy());
         subscription.setCreatedAt(now);
         subscription.setUpdatedAt(now);
         return subscriptionRepository.save(subscription);
     }
 
-    private LocalDateTime addCycle(LocalDateTime base, BillingCycle cycle) {
-        return cycle == BillingCycle.YEARLY ? base.plusYears(1) : base.plusMonths(1);
+    private LocalDateTime addCycle(LocalDateTime base, Payment payment) {
+        return base.plusDays(payment.getSubscriptionType().getDurationDays());
     }
 }

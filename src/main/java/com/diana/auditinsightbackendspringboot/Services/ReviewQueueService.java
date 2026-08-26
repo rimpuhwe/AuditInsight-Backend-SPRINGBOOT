@@ -3,14 +3,13 @@ package com.diana.auditinsightbackendspringboot.Services;
 import com.diana.auditinsightbackendspringboot.DTOs.CreateReviewQueueRequest;
 import com.diana.auditinsightbackendspringboot.DTOs.ResolveReviewQueueRequest;
 import com.diana.auditinsightbackendspringboot.DTOs.ReviewQueueResponse;
-import com.diana.auditinsightbackendspringboot.Enum.MemberStatus;
+import com.diana.auditinsightbackendspringboot.Enum.Permission;
 import com.diana.auditinsightbackendspringboot.Enum.ReviewStatus;
-import com.diana.auditinsightbackendspringboot.Enum.Role;
 import com.diana.auditinsightbackendspringboot.Exceptions.Custom.ForbiddenException;
 import com.diana.auditinsightbackendspringboot.Exceptions.Custom.InvalidRecord;
 import com.diana.auditinsightbackendspringboot.Models.ReviewQueue;
-import com.diana.auditinsightbackendspringboot.Models.User;
 import com.diana.auditinsightbackendspringboot.Repositories.*;
+import com.diana.auditinsightbackendspringboot.Services.OrgAccessService.OrgMemberContext;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
@@ -23,34 +22,22 @@ public class ReviewQueueService {
 
     private final ReviewQueueRepository reviewRepo;
     private final TransactionRepository txnRepo;
-    private final OrganisationMemberRepository memberRepo;
-    private final UserRepository userRepo;
+    private final OrgAccessService orgAccessService;
     private final NotificationService notificationService;
 
     public ReviewQueueService(ReviewQueueRepository reviewRepo,
                               TransactionRepository txnRepo,
-                              OrganisationMemberRepository memberRepo,
-                              UserRepository userRepo,
+                              OrgAccessService orgAccessService,
                               NotificationService notificationService) {
         this.reviewRepo = reviewRepo;
         this.txnRepo = txnRepo;
-        this.memberRepo = memberRepo;
-        this.userRepo = userRepo;
+        this.orgAccessService = orgAccessService;
         this.notificationService = notificationService;
     }
 
 
-    private record OrgContext(User user, Role role) {}
-
-    private Mono<OrgContext> resolveContext(UUID orgId, String email) {
-        return userRepo.findByUsername(email)
-                .switchIfEmpty(Mono.error(new InvalidRecord("User not found")))
-                .flatMap(user -> memberRepo.findByOrganisationIdAndUserId(orgId, user.getId())
-                        .switchIfEmpty(Mono.error(new ForbiddenException(
-                                "You are not a member of this organisation")))
-                        .flatMap(m -> m.getStatus() != MemberStatus.ACTIVE
-                                ? Mono.error(new ForbiddenException("Your membership is not active"))
-                                : Mono.just(new OrgContext(user, m.getRole()))));
+    private Mono<OrgMemberContext> resolveContext(UUID orgId, String email) {
+        return orgAccessService.resolveGatedMember(orgId, email);
     }
 
 
@@ -74,7 +61,7 @@ public class ReviewQueueService {
     public Mono<ReviewQueueResponse> flagIssue(String email, CreateReviewQueueRequest req) {
         return resolveContext(req.getOrganisationId(), email)
                 .flatMap(ctx -> {
-                    if (ctx.role() != Role.AUDITOR) {
+                    if (!orgAccessService.hasPermission(ctx.role(), Permission.REVIEW_FLAG)) {
                         return Mono.error(new ForbiddenException(
                                 "Permission denied. Only auditors can flag issues."));
                     }
@@ -127,7 +114,7 @@ public class ReviewQueueService {
                 .switchIfEmpty(Mono.error(new InvalidRecord("Review queue item not found")))
                 .flatMap(rq -> resolveContext(rq.getOrganisationId(), email)
                         .flatMap(ctx -> {
-                            if (ctx.role() == Role.AUDITOR) {
+                            if (!orgAccessService.hasPermission(ctx.role(), Permission.REVIEW_RESOLVE)) {
                                 return Mono.error(new ForbiddenException(
                                         "Permission denied. Auditors cannot resolve issues."));
                             }

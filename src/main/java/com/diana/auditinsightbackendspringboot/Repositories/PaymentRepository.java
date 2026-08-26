@@ -10,7 +10,7 @@ import java.util.UUID;
 
 public interface PaymentRepository extends ReactiveCrudRepository<Payment, UUID> {
 
-    Mono<Payment> findByProviderReference(String providerReference);
+    Mono<Payment> findByProviderTransactionId(String providerTransactionId);
 
     /**
      * Compare-and-set link: only succeeds (returns 1) the first time it's called for a given

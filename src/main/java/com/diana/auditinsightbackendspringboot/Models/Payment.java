@@ -1,9 +1,8 @@
 package com.diana.auditinsightbackendspringboot.Models;
 
-import com.diana.auditinsightbackendspringboot.Enum.BillingCycle;
 import com.diana.auditinsightbackendspringboot.Enum.PaymentProvider;
 import com.diana.auditinsightbackendspringboot.Enum.PaymentStatus;
-import com.diana.auditinsightbackendspringboot.Enum.PlanTier;
+import com.diana.auditinsightbackendspringboot.Enum.SubscriptionType;
 import lombok.Getter;
 import lombok.Setter;
 import org.springframework.data.annotation.Id;
@@ -25,30 +24,25 @@ public class Payment {
     @Column("organisation_id")
     private UUID organisationId;
 
-    @Column("plan_tier")
-    private PlanTier planTier;
-
-    @Column("billing_cycle")
-    private BillingCycle billingCycle;
+    @Column("subscription_type")
+    private SubscriptionType subscriptionType;
 
     private PaymentProvider provider;
 
     private PaymentStatus status = PaymentStatus.PENDING;
 
-    @Column("usd_amount")
-    private BigDecimal usdAmount;
+    /** Backend-computed price for the selected {@link #subscriptionType} — never trusted from the client. */
+    @Column("expected_amount")
+    private BigDecimal expectedAmount;
 
-    @Column("exchange_rate")
-    private BigDecimal exchangeRate;
+    /** Amount the provider actually confirms was collected; null until a terminal status is reached. */
+    @Column("received_amount")
+    private BigDecimal receivedAmount;
 
-    @Column("charged_currency")
-    private String chargedCurrency;
+    private String currency;
 
-    @Column("charged_amount")
-    private BigDecimal chargedAmount;
-
-    @Column("provider_reference")
-    private String providerReference;
+    @Column("provider_transaction_id")
+    private String providerTransactionId;
 
     @Column("payer_phone")
     private String payerPhone;

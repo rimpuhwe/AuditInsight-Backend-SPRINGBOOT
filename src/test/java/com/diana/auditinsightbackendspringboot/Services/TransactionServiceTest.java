@@ -35,6 +35,7 @@ class TransactionServiceTest {
     @Mock private OrganisationRepository organisationRepo;
     @Mock private OrganisationMemberRepository memberRepo;
     @Mock private UserRepository userRepo;
+    @Mock private SubscriptionRepository subscriptionRepo;
     @Mock private NotificationService notificationService;
 
     private TransactionService service;
@@ -45,10 +46,13 @@ class TransactionServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new TransactionService(txnRepo, evidenceRepo, reviewRepo, organisationRepo, memberRepo,
+        OrgAccessService orgAccessService = new OrgAccessService(userRepo, memberRepo, subscriptionRepo);
+        service = new TransactionService(txnRepo, evidenceRepo, reviewRepo, organisationRepo, orgAccessService,
                 userRepo, notificationService);
         lenient().when(organisationRepo.findById(ORG_ID))
                 .thenReturn(Mono.just(organisation(ORG_ID, OrganisationType.PRIVATE)));
+        lenient().when(subscriptionRepo.findFirstByOrganisationIdOrderByCreatedAtDesc(ORG_ID))
+                .thenReturn(Mono.just(activeSubscription(ORG_ID)));
     }
 
     // ──────────────────────────── createTransaction ───────────────────────────
@@ -342,6 +346,15 @@ class TransactionServiceTest {
         org.setId(id);
         org.setIndustry(type);
         return org;
+    }
+
+    private Subscription activeSubscription(UUID orgId) {
+        Subscription s = new Subscription();
+        s.setId(UUID.randomUUID());
+        s.setOrganisationId(orgId);
+        s.setStatus(SubscriptionStatus.ACTIVE);
+        s.setEndDate(LocalDateTime.now().plusDays(10));
+        return s;
     }
 
     private Transaction txn(UUID id) {

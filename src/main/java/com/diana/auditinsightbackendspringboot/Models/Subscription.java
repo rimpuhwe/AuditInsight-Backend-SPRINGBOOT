@@ -1,8 +1,7 @@
 package com.diana.auditinsightbackendspringboot.Models;
 
-import com.diana.auditinsightbackendspringboot.Enum.BillingCycle;
-import com.diana.auditinsightbackendspringboot.Enum.PlanTier;
 import com.diana.auditinsightbackendspringboot.Enum.SubscriptionStatus;
+import com.diana.auditinsightbackendspringboot.Enum.SubscriptionType;
 import lombok.Getter;
 import lombok.Setter;
 import org.springframework.data.annotation.Id;
@@ -23,11 +22,9 @@ public class Subscription {
     @Column("organisation_id")
     private UUID organisationId;
 
-    @Column("plan_tier")
-    private PlanTier planTier;
-
-    @Column("billing_cycle")
-    private BillingCycle billingCycle;
+    /** Null while {@link #status} is {@code TRIAL} — the trial isn't tied to a paid period. */
+    @Column("subscription_type")
+    private SubscriptionType subscriptionType;
 
     private SubscriptionStatus status = SubscriptionStatus.PENDING;
 
@@ -36,6 +33,12 @@ public class Subscription {
 
     @Column("end_date")
     private LocalDateTime endDate;
+
+    @Column("trial_reminder_sent")
+    private boolean trialReminderSent;
+
+    @Column("expiry_reminder_sent")
+    private boolean expiryReminderSent;
 
     @Column("created_by")
     private Long createdBy;

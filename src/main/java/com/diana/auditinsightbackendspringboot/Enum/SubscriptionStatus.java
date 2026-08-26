@@ -1,3 +1,3 @@
 package com.diana.auditinsightbackendspringboot.Enum;
 
-public enum SubscriptionStatus { PENDING, ACTIVE, EXPIRED, CANCELLED }
+public enum SubscriptionStatus { TRIAL, PENDING, ACTIVE, EXPIRED, CANCELLED }

@@ -19,6 +19,7 @@ public class OrganisationResponse {
     private UUID organisationId;
     private String name;
     private String industry;
+    private String countryCode;
     private String fiscalYearStart;
     private String fiscalYearEnd;
     private String defaultCurrency;

@@ -5,6 +5,7 @@ import com.diana.auditinsightbackendspringboot.Enum.InvitationStatus;
 import com.diana.auditinsightbackendspringboot.Enum.MemberStatus;
 import com.diana.auditinsightbackendspringboot.Enum.OrganisationType;
 import com.diana.auditinsightbackendspringboot.Enum.Role;
+import com.diana.auditinsightbackendspringboot.Enum.SubscriptionStatus;
 import com.diana.auditinsightbackendspringboot.Exceptions.Custom.InvalidRecord;
 import com.diana.auditinsightbackendspringboot.Models.*;
 import com.diana.auditinsightbackendspringboot.Repositories.*;
@@ -29,6 +30,7 @@ public class OrganisationService {
     private final OrganisationMemberRepository memberRepo;
     private final OrganisationCurrencyRepository currencyRepo;
     private final OrganisationInvitationRepository invitationRepo;
+    private final SubscriptionRepository subscriptionRepo;
     private final UserRepository userRepo;
     private final ClientRepository clientRepo;
     private final EmailService emailService;
@@ -39,6 +41,7 @@ public class OrganisationService {
             OrganisationMemberRepository memberRepo,
             OrganisationCurrencyRepository currencyRepo,
             OrganisationInvitationRepository invitationRepo,
+            SubscriptionRepository subscriptionRepo,
             UserRepository userRepo,
             ClientRepository clientRepo,
             EmailService emailService,
@@ -47,6 +50,7 @@ public class OrganisationService {
         this.memberRepo = memberRepo;
         this.currencyRepo = currencyRepo;
         this.invitationRepo = invitationRepo;
+        this.subscriptionRepo = subscriptionRepo;
         this.userRepo = userRepo;
         this.clientRepo = clientRepo;
         this.emailService = emailService;
@@ -96,6 +100,7 @@ public class OrganisationService {
                     r.setOrganisationId(org.getId());
                     r.setName(org.getName());
                     r.setIndustry(org.getIndustry().name());
+                    r.setCountryCode(org.getCountryCode().name());
                     r.setFiscalYearStart(org.getFiscalYearStart());
                     r.setFiscalYearEnd(org.getFiscalYearEnd());
                     r.setDefaultCurrency(org.getDefaultCurrency());
@@ -152,6 +157,7 @@ public class OrganisationService {
                             org.setClientId(clientProfile.getId());
                             org.setName(request.getName());
                             org.setIndustry(request.getIndustry());
+                            org.setCountryCode(request.getCountryCode());
                             org.setSize(request.getSize());
                             org.setFiscalYearStart(request.getFiscalYearStart());
                             org.setFiscalYearEnd(request.getFiscalYearEnd());
@@ -181,10 +187,29 @@ public class OrganisationService {
 
                                 return memberRepo.save(ownerMember)
                                         .thenMany(saveCurrencies)
+                                        .then(createTrialSubscription(saved.getId(), user.getId()))
                                         .then(buildResponse("Organisation created successfully", saved));
                             });
                         })
                 );
+    }
+
+
+    /**
+     * Every new organisation gets a 30-day free trial — purely an internal subscription state,
+     * no payment/PawaPay transaction is created for it.
+     */
+    private Mono<Subscription> createTrialSubscription(UUID organisationId, Long ownerUserId) {
+        LocalDateTime now = LocalDateTime.now();
+        Subscription trial = new Subscription();
+        trial.setOrganisationId(organisationId);
+        trial.setStatus(SubscriptionStatus.TRIAL);
+        trial.setStartDate(now);
+        trial.setEndDate(now.plusDays(30));
+        trial.setCreatedBy(ownerUserId);
+        trial.setCreatedAt(now);
+        trial.setUpdatedAt(now);
+        return subscriptionRepo.save(trial);
     }
 
 

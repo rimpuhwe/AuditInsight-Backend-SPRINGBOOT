@@ -6,6 +6,7 @@ import com.diana.auditinsightbackendspringboot.Exceptions.Custom.ForbiddenExcept
 import com.diana.auditinsightbackendspringboot.Exceptions.Custom.InvalidRecord;
 import com.diana.auditinsightbackendspringboot.Models.*;
 import com.diana.auditinsightbackendspringboot.Repositories.*;
+import com.diana.auditinsightbackendspringboot.Services.OrgAccessService.OrgMemberContext;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
@@ -20,7 +21,7 @@ public class TransactionService {
     private final EvidenceRepository evidenceRepo;
     private final ReviewQueueRepository reviewRepo;
     private final OrganisationRepository organisationRepo;
-    private final OrganisationMemberRepository memberRepo;
+    private final OrgAccessService orgAccessService;
     private final UserRepository userRepo;
     private final NotificationService notificationService;
 
@@ -28,31 +29,22 @@ public class TransactionService {
                               EvidenceRepository evidenceRepo,
                               ReviewQueueRepository reviewRepo,
                               OrganisationRepository organisationRepo,
-                              OrganisationMemberRepository memberRepo,
+                              OrgAccessService orgAccessService,
                               UserRepository userRepo,
                               NotificationService notificationService) {
         this.txnRepo = txnRepo;
         this.evidenceRepo = evidenceRepo;
         this.reviewRepo = reviewRepo;
         this.organisationRepo = organisationRepo;
-        this.memberRepo = memberRepo;
+        this.orgAccessService = orgAccessService;
         this.userRepo = userRepo;
         this.notificationService = notificationService;
     }
 
 
     private Mono<OrgMemberContext> resolveContext(UUID orgId, String email) {
-        return userRepo.findByUsername(email)
-                .switchIfEmpty(Mono.error(new InvalidRecord("User not found")))
-                .flatMap(user -> memberRepo.findByOrganisationIdAndUserId(orgId, user.getId())
-                        .switchIfEmpty(Mono.error(new ForbiddenException(
-                                "You are not a member of this organisation")))
-                        .flatMap(m -> m.getStatus() != MemberStatus.ACTIVE
-                                ? Mono.error(new ForbiddenException("Your membership is not active"))
-                                : Mono.just(new OrgMemberContext(user, m.getRole()))));
+        return orgAccessService.resolveGatedMember(orgId, email);
     }
-
-    private record OrgMemberContext(User user, Role role) {}
 
 
     private TransactionResponse toResponse(Transaction t, String creatorName) {
@@ -96,7 +88,7 @@ public class TransactionService {
                     OrgMemberContext ctx = tuple.getT1();
                     Organisation org = tuple.getT2();
 
-                    if (ctx.role() == Role.AUDITOR) {
+                    if (!orgAccessService.hasPermission(ctx.role(), Permission.TRANSACTION_WRITE)) {
                         return Mono.error(new ForbiddenException(
                                 "Permission denied. Auditors cannot create transactions."));
                     }
@@ -179,7 +171,7 @@ public class TransactionService {
                 .switchIfEmpty(Mono.error(new InvalidRecord("Transaction not found")))
                 .flatMap(t -> resolveContext(t.getOrganisationId(), email)
                         .flatMap(ctx -> {
-                            if (ctx.role() == Role.AUDITOR) {
+                            if (!orgAccessService.hasPermission(ctx.role(), Permission.TRANSACTION_WRITE)) {
                                 return Mono.error(new ForbiddenException(
                                         "Permission denied. Auditors cannot update transaction status."));
                             }

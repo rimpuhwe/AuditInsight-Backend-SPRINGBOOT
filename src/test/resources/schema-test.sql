@@ -44,6 +44,7 @@ CREATE TABLE IF NOT EXISTS organisation (
     client_id         UUID         NOT NULL,
     name              VARCHAR(255) NOT NULL,
     industry          VARCHAR(100),
+    country_code      VARCHAR(2)   NOT NULL DEFAULT 'RW',
     fiscal_year_start VARCHAR(5)   NOT NULL DEFAULT '01-01',
     fiscal_year_end   VARCHAR(5)   NOT NULL DEFAULT '12-31',
     default_currency  VARCHAR(10)  NOT NULL DEFAULT 'USD',
@@ -125,72 +126,34 @@ CREATE TABLE IF NOT EXISTS review_queue (
     resolved_at     TIMESTAMP
 );
 
-CREATE TABLE IF NOT EXISTS plans (
-    tier                      VARCHAR(20)   PRIMARY KEY,
-    description               VARCHAR(255)  NOT NULL,
-    monthly_price_usd         NUMERIC(10,2) NOT NULL,
-    yearly_price_usd          NUMERIC(10,2) NOT NULL,
-    max_users                 INT,
-    audits_per_month          INT,
-    storage_gb                INT           NOT NULL,
-    basic_reports              BOOLEAN NOT NULL DEFAULT FALSE,
-    email_support              BOOLEAN NOT NULL DEFAULT FALSE,
-    advanced_reports           BOOLEAN NOT NULL DEFAULT FALSE,
-    audit_trail                BOOLEAN NOT NULL DEFAULT FALSE,
-    priority_support            BOOLEAN NOT NULL DEFAULT FALSE,
-    custom_workflows            BOOLEAN NOT NULL DEFAULT FALSE,
-    compliance_templates        BOOLEAN NOT NULL DEFAULT FALSE,
-    api_access                  BOOLEAN NOT NULL DEFAULT FALSE,
-    support_24_7                BOOLEAN NOT NULL DEFAULT FALSE,
-    sso_saml                    BOOLEAN NOT NULL DEFAULT FALSE,
-    dedicated_account_manager   BOOLEAN NOT NULL DEFAULT FALSE,
-    custom_integrations         BOOLEAN NOT NULL DEFAULT FALSE,
-    sla_guarantee               BOOLEAN NOT NULL DEFAULT FALSE
-);
-
-MERGE INTO plans (tier, description, monthly_price_usd, yearly_price_usd, max_users, audits_per_month, storage_gb,
-                   basic_reports, email_support, advanced_reports, audit_trail, priority_support, custom_workflows,
-                   compliance_templates, api_access, support_24_7, sso_saml, dedicated_account_manager,
-                   custom_integrations, sla_guarantee)
-KEY (tier)
-VALUES
-    ('FREE', 'Get started with basic audit management', 0, 0, 2, 5, 1,
-     TRUE, TRUE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE),
-    ('STARTER', 'For small teams getting serious about audits', 29, 290, 10, 50, 10,
-     TRUE, TRUE, TRUE, TRUE, TRUE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE),
-    ('PROFESSIONAL', 'Full-featured audit management for growing organizations', 79, 790, 50, NULL, 100,
-     TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, FALSE, FALSE, FALSE, FALSE),
-    ('ENTERPRISE', 'Enterprise-grade security and compliance', 199, 1990, NULL, NULL, 1000,
-     TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE);
-
 CREATE TABLE IF NOT EXISTS subscriptions (
-    id              UUID          DEFAULT RANDOM_UUID() PRIMARY KEY,
-    organisation_id UUID          NOT NULL,
-    plan_tier       VARCHAR(20)   NOT NULL,
-    billing_cycle   VARCHAR(10)   NOT NULL,
-    status          VARCHAR(20)   NOT NULL DEFAULT 'PENDING',
-    start_date      TIMESTAMP,
-    end_date        TIMESTAMP,
-    created_by      BIGINT,
-    created_at      TIMESTAMP     DEFAULT CURRENT_TIMESTAMP,
-    updated_at      TIMESTAMP     DEFAULT CURRENT_TIMESTAMP
+    id                    UUID          DEFAULT RANDOM_UUID() PRIMARY KEY,
+    organisation_id       UUID          NOT NULL,
+    subscription_type     VARCHAR(20),
+    status                VARCHAR(20)   NOT NULL DEFAULT 'PENDING',
+    start_date            TIMESTAMP,
+    end_date              TIMESTAMP,
+    trial_reminder_sent   BOOLEAN       NOT NULL DEFAULT FALSE,
+    expiry_reminder_sent  BOOLEAN       NOT NULL DEFAULT FALSE,
+    created_by            BIGINT,
+    created_at            TIMESTAMP     DEFAULT CURRENT_TIMESTAMP,
+    updated_at            TIMESTAMP     DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE IF NOT EXISTS payments (
-    id                 UUID          DEFAULT RANDOM_UUID() PRIMARY KEY,
-    organisation_id    UUID          NOT NULL,
-    plan_tier          VARCHAR(20)   NOT NULL,
-    billing_cycle      VARCHAR(10)   NOT NULL,
-    provider           VARCHAR(10)   NOT NULL,
-    status             VARCHAR(10)   NOT NULL DEFAULT 'PENDING',
-    usd_amount         NUMERIC(10,2) NOT NULL,
-    exchange_rate      NUMERIC(18,6) NOT NULL,
-    charged_currency   VARCHAR(3)    NOT NULL,
-    charged_amount     NUMERIC(18,2) NOT NULL,
-    provider_reference VARCHAR(100)  UNIQUE,
-    payer_phone        VARCHAR(20),
-    subscription_id    UUID,
-    created_by         BIGINT,
-    created_at         TIMESTAMP     DEFAULT CURRENT_TIMESTAMP,
-    updated_at         TIMESTAMP     DEFAULT CURRENT_TIMESTAMP
+    id                       UUID          DEFAULT RANDOM_UUID() PRIMARY KEY,
+    organisation_id          UUID          NOT NULL,
+    subscription_type        VARCHAR(20)   NOT NULL,
+    provider                 VARCHAR(10)   NOT NULL,
+    status                   VARCHAR(10)   NOT NULL DEFAULT 'PENDING',
+    expected_amount          NUMERIC(18,0) NOT NULL,
+    received_amount          NUMERIC(18,0),
+    currency                 VARCHAR(3)    NOT NULL,
+    provider_transaction_id  VARCHAR(100)  UNIQUE,
+    payer_phone              VARCHAR(20),
+    subscription_id          UUID,
+    failure_reason           VARCHAR(255),
+    created_by               BIGINT,
+    created_at               TIMESTAMP     DEFAULT CURRENT_TIMESTAMP,
+    updated_at               TIMESTAMP     DEFAULT CURRENT_TIMESTAMP
 );
