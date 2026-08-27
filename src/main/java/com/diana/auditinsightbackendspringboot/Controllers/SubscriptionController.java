@@ -39,8 +39,8 @@ public class SubscriptionController {
             Authentication auth,
             @PathVariable UUID organisationId,
             @Valid @RequestBody StartMomoCheckoutRequest request) {
-        return paymentService.startMomoCheckout(organisationId, auth.getName(), request.getPlanTier(),
-                        request.getBillingCycle(), request.getPhoneNumber())
+        return paymentService.startMomoCheckout(organisationId, auth.getName(), request.getSubscriptionType(),
+                        request.getPhoneNumber())
                 .map(payment -> new ResponseEntity<>(toStatusResponse(payment), HttpStatus.CREATED));
     }
 
@@ -64,8 +64,7 @@ public class SubscriptionController {
             Authentication auth,
             @PathVariable UUID organisationId,
             @Valid @RequestBody StartCardCheckoutRequest request) {
-        return paymentService.startCardCheckout(organisationId, auth.getName(), request.getPlanTier(),
-                        request.getBillingCycle())
+        return paymentService.startCardCheckout(organisationId, auth.getName(), request.getSubscriptionType())
                 .map(result -> {
                     CardCheckoutResponse response = new CardCheckoutResponse();
                     response.setPaymentId(result.payment().getId());
@@ -108,9 +107,9 @@ public class SubscriptionController {
         r.setPaymentId(payment.getId());
         r.setProvider(payment.getProvider());
         r.setStatus(payment.getStatus());
-        r.setUsdAmount(payment.getUsdAmount());
-        r.setChargedCurrency(payment.getChargedCurrency());
-        r.setChargedAmount(payment.getChargedAmount());
+        r.setExpectedAmount(payment.getExpectedAmount());
+        r.setReceivedAmount(payment.getReceivedAmount());
+        r.setCurrency(payment.getCurrency());
         r.setSubscriptionId(payment.getSubscriptionId());
         r.setFailureReason(payment.getFailureReason());
         return r;
@@ -120,8 +119,7 @@ public class SubscriptionController {
         SubscriptionResponse r = new SubscriptionResponse();
         r.setId(subscription.getId());
         r.setOrganisationId(subscription.getOrganisationId());
-        r.setPlanTier(subscription.getPlanTier());
-        r.setBillingCycle(subscription.getBillingCycle());
+        r.setSubscriptionType(subscription.getSubscriptionType());
         r.setStatus(subscription.getStatus());
         r.setStartDate(subscription.getStartDate());
         r.setEndDate(subscription.getEndDate());

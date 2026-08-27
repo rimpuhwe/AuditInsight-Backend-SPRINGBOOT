@@ -36,6 +36,7 @@ class EvidenceServiceTest {
     @Mock private OrganisationRepository organisationRepo;
     @Mock private OrganisationMemberRepository memberRepo;
     @Mock private UserRepository userRepo;
+    @Mock private SubscriptionRepository subscriptionRepo;
     @Mock private TransactionService txnService;
     @Mock private CloudinaryService cloudinaryService;
     @Mock private NotificationService notificationService;
@@ -49,10 +50,13 @@ class EvidenceServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new EvidenceService(evidenceRepo, txnRepo, organisationRepo, memberRepo, userRepo,
+        OrgAccessService orgAccessService = new OrgAccessService(userRepo, memberRepo, subscriptionRepo);
+        service = new EvidenceService(evidenceRepo, txnRepo, organisationRepo, orgAccessService,
                 txnService, cloudinaryService, notificationService);
         lenient().when(organisationRepo.findById(ORG_ID))
                 .thenReturn(Mono.just(organisation(ORG_ID, OrganisationType.PRIVATE)));
+        lenient().when(subscriptionRepo.findFirstByOrganisationIdOrderByCreatedAtDesc(ORG_ID))
+                .thenReturn(Mono.just(activeSubscription(ORG_ID)));
     }
 
     // ──────────────────────────── uploadEvidence ──────────────────────────────
@@ -90,7 +94,7 @@ class EvidenceServiceTest {
 
         StepVerifier.create(service.uploadEvidence("member@test.com", filePart("receipt.jpg"),
                         ORG_ID, TXN_ID, "Receipt",
-                        "Sales Evidence", "Receipts", "Monthly receipt"))
+                        "Sales and Revenue", "Receipts", "Monthly receipt"))
                 .expectNextMatches(r -> r.getFileType().equals("jpg"))
                 .verifyComplete();
     }
@@ -347,6 +351,15 @@ class EvidenceServiceTest {
         org.setId(id);
         org.setIndustry(type);
         return org;
+    }
+
+    private Subscription activeSubscription(UUID orgId) {
+        Subscription s = new Subscription();
+        s.setId(UUID.randomUUID());
+        s.setOrganisationId(orgId);
+        s.setStatus(SubscriptionStatus.ACTIVE);
+        s.setEndDate(LocalDateTime.now().plusDays(10));
+        return s;
     }
 
     private Evidence evidence(UUID id, UUID txnId) {

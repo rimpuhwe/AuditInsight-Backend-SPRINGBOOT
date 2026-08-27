@@ -1,5 +1,6 @@
 package com.diana.auditinsightbackendspringboot.Models;
 
+import com.diana.auditinsightbackendspringboot.Enum.CountryCode;
 import com.diana.auditinsightbackendspringboot.Enum.OrganisationType;
 import lombok.Getter;
 import lombok.Setter;
@@ -27,6 +28,8 @@ public class Organisation {
 
     private String size;
 
+    @Column("country_code")
+    private CountryCode countryCode;
 
     @Column("fiscal_year_start")
     private String fiscalYearStart;

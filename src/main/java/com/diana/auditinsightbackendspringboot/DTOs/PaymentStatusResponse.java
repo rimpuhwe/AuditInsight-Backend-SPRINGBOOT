@@ -16,9 +16,9 @@ public class PaymentStatusResponse {
     private UUID paymentId;
     private PaymentProvider provider;
     private PaymentStatus status;
-    private BigDecimal usdAmount;
-    private String chargedCurrency;
-    private BigDecimal chargedAmount;
+    private BigDecimal expectedAmount;
+    private BigDecimal receivedAmount;
+    private String currency;
     private UUID subscriptionId;
     private String failureReason;
 }

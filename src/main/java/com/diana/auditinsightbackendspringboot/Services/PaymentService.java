@@ -1,20 +1,17 @@
 package com.diana.auditinsightbackendspringboot.Services;
 
-import com.diana.auditinsightbackendspringboot.Enum.BillingCycle;
 import com.diana.auditinsightbackendspringboot.Enum.MemberStatus;
 import com.diana.auditinsightbackendspringboot.Enum.PaymentProvider;
 import com.diana.auditinsightbackendspringboot.Enum.PaymentStatus;
-import com.diana.auditinsightbackendspringboot.Enum.PlanTier;
 import com.diana.auditinsightbackendspringboot.Enum.SubscriptionStatus;
+import com.diana.auditinsightbackendspringboot.Enum.SubscriptionType;
 import com.diana.auditinsightbackendspringboot.Exceptions.Custom.ForbiddenException;
 import com.diana.auditinsightbackendspringboot.Exceptions.Custom.InvalidRecord;
 import com.diana.auditinsightbackendspringboot.Models.Payment;
-import com.diana.auditinsightbackendspringboot.Models.Plan;
 import com.diana.auditinsightbackendspringboot.Models.Subscription;
 import com.diana.auditinsightbackendspringboot.Models.User;
 import com.diana.auditinsightbackendspringboot.Repositories.OrganisationMemberRepository;
 import com.diana.auditinsightbackendspringboot.Repositories.PaymentRepository;
-import com.diana.auditinsightbackendspringboot.Repositories.PlanRepository;
 import com.diana.auditinsightbackendspringboot.Repositories.SubscriptionRepository;
 import com.diana.auditinsightbackendspringboot.Repositories.UserRepository;
 import org.springframework.stereotype.Service;
@@ -29,30 +26,24 @@ import java.util.UUID;
 public class PaymentService {
 
     private final PaymentRepository paymentRepository;
-    private final PlanRepository planRepository;
     private final SubscriptionRepository subscriptionRepository;
     private final UserRepository userRepository;
     private final OrganisationMemberRepository memberRepository;
-    private final ExchangeRateService exchangeRateService;
     private final PawaPayService pawaPayService;
     private final FlutterwaveService flutterwaveService;
     private final SubscriptionActivationService activationService;
 
     public PaymentService(PaymentRepository paymentRepository,
-                           PlanRepository planRepository,
                            SubscriptionRepository subscriptionRepository,
                            UserRepository userRepository,
                            OrganisationMemberRepository memberRepository,
-                           ExchangeRateService exchangeRateService,
                            PawaPayService pawaPayService,
                            FlutterwaveService flutterwaveService,
                            SubscriptionActivationService activationService) {
         this.paymentRepository = paymentRepository;
-        this.planRepository = planRepository;
         this.subscriptionRepository = subscriptionRepository;
         this.userRepository = userRepository;
         this.memberRepository = memberRepository;
-        this.exchangeRateService = exchangeRateService;
         this.pawaPayService = pawaPayService;
         this.flutterwaveService = flutterwaveService;
         this.activationService = activationService;
@@ -70,58 +61,42 @@ public class PaymentService {
                                 : Mono.just(user)));
     }
 
-    public Mono<Payment> startMomoCheckout(UUID organisationId, String email, PlanTier planTier,
-                                            BillingCycle billingCycle, String phoneNumber) {
+    public Mono<Payment> startMomoCheckout(UUID organisationId, String email, SubscriptionType subscriptionType,
+                                            String phoneNumber) {
         return resolveMember(organisationId, email)
-                .flatMap(user -> planRepository.findById(planTier)
-                        .switchIfEmpty(Mono.error(new InvalidRecord("Unknown plan: " + planTier)))
-                        .flatMap(plan -> exchangeRateService.convert(plan.priceFor(billingCycle), "RWF")
-                                .flatMap(conversion -> createPendingPayment(
-                                        organisationId, planTier, billingCycle, PaymentProvider.MOMO,
-                                        plan, conversion, phoneNumber, null, user.getId()))
-                                .flatMap(payment -> pawaPayService.requestDeposit(
-                                                payment.getId(), payment.getChargedAmount(), phoneNumber)
-                                        .thenReturn(payment)
-                                        .onErrorResume(e -> markFailed(payment, e.getMessage()).then(Mono.error(e))))));
+                .flatMap(user -> createPendingPayment(organisationId, subscriptionType, PaymentProvider.MOMO,
+                                phoneNumber, null, user.getId())
+                        .flatMap(payment -> pawaPayService.requestDeposit(
+                                        payment.getId(), payment.getExpectedAmount(), phoneNumber)
+                                .thenReturn(payment)
+                                .onErrorResume(e -> markFailed(payment, e.getMessage()).then(Mono.error(e)))));
     }
 
-    public Mono<CardCheckoutResult> startCardCheckout(UUID organisationId, String email, PlanTier planTier,
-                                                        BillingCycle billingCycle) {
+    public Mono<CardCheckoutResult> startCardCheckout(UUID organisationId, String email, SubscriptionType subscriptionType) {
         return resolveMember(organisationId, email)
-                .flatMap(user -> planRepository.findById(planTier)
-                        .switchIfEmpty(Mono.error(new InvalidRecord("Unknown plan: " + planTier)))
-                        .flatMap(plan -> {
-                            BigDecimal usd = plan.priceFor(billingCycle);
-                            // Flutterwave supports charging directly in USD, so no second currency
-                            // conversion is introduced for the card path — rate is locked at 1.
-                            ExchangeRateService.ConversionResult directUsd =
-                                    new ExchangeRateService.ConversionResult(usd, "USD", usd, BigDecimal.ONE);
-                            String txRef = "AI-" + UUID.randomUUID();
-
-                            return createPendingPayment(organisationId, planTier, billingCycle, PaymentProvider.CARD,
-                                    plan, directUsd, null, txRef, user.getId())
-                                    .flatMap(payment -> flutterwaveService.initiateCheckout(txRef, usd, "USD", email)
-                                            .map(checkoutUrl -> new CardCheckoutResult(payment, checkoutUrl))
-                                            .onErrorResume(e -> markFailed(payment, e.getMessage()).then(Mono.error(e))));
-                        }));
+                .flatMap(user -> {
+                    String txRef = "AI-" + UUID.randomUUID();
+                    return createPendingPayment(organisationId, subscriptionType, PaymentProvider.CARD,
+                            null, txRef, user.getId())
+                            .flatMap(payment -> flutterwaveService.initiateCheckout(
+                                            txRef, subscriptionType.getPriceRwf(), SubscriptionType.CURRENCY, email)
+                                    .map(checkoutUrl -> new CardCheckoutResult(payment, checkoutUrl))
+                                    .onErrorResume(e -> markFailed(payment, e.getMessage()).then(Mono.error(e))));
+                });
     }
 
-    private Mono<Payment> createPendingPayment(UUID organisationId, PlanTier planTier, BillingCycle billingCycle,
-                                                PaymentProvider provider, Plan plan,
-                                                ExchangeRateService.ConversionResult conversion,
-                                                String payerPhone, String providerReference, Long createdBy) {
+    private Mono<Payment> createPendingPayment(UUID organisationId, SubscriptionType subscriptionType,
+                                                PaymentProvider provider, String payerPhone,
+                                                String providerTransactionId, Long createdBy) {
         Payment payment = new Payment();
         payment.setOrganisationId(organisationId);
-        payment.setPlanTier(planTier);
-        payment.setBillingCycle(billingCycle);
+        payment.setSubscriptionType(subscriptionType);
         payment.setProvider(provider);
         payment.setStatus(PaymentStatus.PENDING);
-        payment.setUsdAmount(plan.priceFor(billingCycle));
-        payment.setExchangeRate(conversion.rate());
-        payment.setChargedCurrency(conversion.currency());
-        payment.setChargedAmount(conversion.convertedAmount());
+        payment.setExpectedAmount(subscriptionType.getPriceRwf());
+        payment.setCurrency(SubscriptionType.CURRENCY);
         payment.setPayerPhone(payerPhone);
-        payment.setProviderReference(providerReference);
+        payment.setProviderTransactionId(providerTransactionId);
         payment.setCreatedBy(createdBy);
         LocalDateTime now = LocalDateTime.now();
         payment.setCreatedAt(now);
@@ -136,11 +111,26 @@ public class PaymentService {
         return paymentRepository.save(payment);
     }
 
-    private Mono<Payment> markSuccessfulAndActivate(Payment payment) {
+    /** Provider confirmed the payment, but for less than the fixed price — never activates the subscription. */
+    private Mono<Payment> markUnderpaid(Payment payment, BigDecimal receivedAmount) {
+        payment.setStatus(PaymentStatus.UNDERPAID);
+        payment.setReceivedAmount(receivedAmount);
+        payment.setFailureReason("Payment could not be completed because the full subscription amount "
+                + "was not received. Please ensure that the required amount is paid.");
+        payment.setUpdatedAt(LocalDateTime.now());
+        return paymentRepository.save(payment);
+    }
+
+    private Mono<Payment> markSuccessfulAndActivate(Payment payment, BigDecimal receivedAmount) {
         payment.setStatus(PaymentStatus.SUCCESSFUL);
+        payment.setReceivedAmount(receivedAmount);
         payment.setUpdatedAt(LocalDateTime.now());
         return paymentRepository.save(payment)
                 .flatMap(saved -> activationService.activateFromPayment(saved).thenReturn(saved));
+    }
+
+    private boolean isUnderpaid(Payment payment, BigDecimal receivedAmount) {
+        return receivedAmount != null && receivedAmount.compareTo(payment.getExpectedAmount()) < 0;
     }
 
     public Mono<Payment> getMomoPaymentStatus(UUID paymentId, String email) {
@@ -154,11 +144,13 @@ public class PaymentService {
                     return switch (payment.getProvider()) {
                         case MOMO -> pawaPayService.getStatus(payment.getId())
                                 .flatMap(result -> switch (result.status()) {
-                                    case SUCCESSFUL -> markSuccessfulAndActivate(payment);
+                                    case SUCCESSFUL -> isUnderpaid(payment, result.amount())
+                                            ? markUnderpaid(payment, result.amount())
+                                            : markSuccessfulAndActivate(payment, result.amount());
                                     case FAILED -> markFailed(payment, result.failureReason());
                                     case PENDING -> Mono.just(payment);
                                 });
-                        case CARD -> flutterwaveService.verifyByTxRef(payment.getProviderReference())
+                        case CARD -> flutterwaveService.verifyByTxRef(payment.getProviderTransactionId())
                                 .flatMap(verification -> resolveVerifiedOutcome(payment, verification));
                     };
                 });
@@ -182,7 +174,7 @@ public class PaymentService {
         String txRef = String.valueOf(data.get("tx_ref"));
         String transactionId = String.valueOf(data.get("id"));
 
-        return paymentRepository.findByProviderReference(txRef)
+        return paymentRepository.findByProviderTransactionId(txRef)
                 .switchIfEmpty(Mono.error(new InvalidRecord("Unknown payment reference: " + txRef)))
                 .flatMap(payment -> {
                     // Already terminal — duplicate webhook delivery, safely ignored.
@@ -199,7 +191,8 @@ public class PaymentService {
      * Flutterwave's transaction id in a webhook body is attacker-controlled — a forged webhook
      * could reference someone else's genuinely-successful transaction. Re-verifying with
      * Flutterwave only proves *some* transaction succeeded; it must also match this payment's
-     * own tx_ref/amount/currency before we trust it enough to activate a subscription.
+     * own tx_ref/currency before we trust it enough to activate a subscription, and the amount
+     * must meet the fixed price in full — a lesser (but real) amount is UNDERPAID, not FAILED.
      */
     private Mono<Payment> resolveVerifiedOutcome(Payment payment, FlutterwaveService.VerificationResult verification) {
         if ("pending".equalsIgnoreCase(verification.status())) {
@@ -208,19 +201,25 @@ public class PaymentService {
         if (!verification.successful()) {
             return markFailed(payment, "Flutterwave reported status: " + verification.status());
         }
-        if (!payment.getProviderReference().equals(verification.txRef())
+        if (!payment.getProviderTransactionId().equals(verification.txRef())
                 || verification.amount() == null
-                || verification.amount().compareTo(payment.getChargedAmount()) != 0
-                || !payment.getChargedCurrency().equalsIgnoreCase(verification.currency())) {
-            return markFailed(payment, "Verified transaction did not match this payment (tx_ref/amount/currency mismatch)");
+                || !payment.getCurrency().equalsIgnoreCase(verification.currency())) {
+            return markFailed(payment, "Verified transaction did not match this payment (tx_ref/currency mismatch)");
         }
-        return markSuccessfulAndActivate(payment);
+        return isUnderpaid(payment, verification.amount())
+                ? markUnderpaid(payment, verification.amount())
+                : markSuccessfulAndActivate(payment, verification.amount());
     }
 
+    /** The org's current subscription — TRIAL or a paid ACTIVE period. */
     public Mono<Subscription> getActiveSubscription(UUID organisationId, String email) {
         return resolveMember(organisationId, email)
                 .then(Mono.defer(() -> subscriptionRepository
-                        .findByOrganisationIdAndStatus(organisationId, SubscriptionStatus.ACTIVE)))
-                .switchIfEmpty(Mono.error(new InvalidRecord("No active subscription for this organisation")));
+                        .findFirstByOrganisationIdOrderByCreatedAtDesc(organisationId)))
+                .switchIfEmpty(Mono.error(new InvalidRecord("No subscription found for this organisation")))
+                .flatMap(subscription -> subscription.getStatus() == SubscriptionStatus.TRIAL
+                                || subscription.getStatus() == SubscriptionStatus.ACTIVE
+                        ? Mono.just(subscription)
+                        : Mono.error(new InvalidRecord("No active subscription for this organisation")));
     }
 }

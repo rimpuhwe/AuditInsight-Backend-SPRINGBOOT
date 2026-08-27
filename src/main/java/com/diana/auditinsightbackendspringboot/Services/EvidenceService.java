@@ -1,8 +1,7 @@
 package com.diana.auditinsightbackendspringboot.Services;
 
 import com.diana.auditinsightbackendspringboot.DTOs.EvidenceResponse;
-import com.diana.auditinsightbackendspringboot.Enum.MemberStatus;
-import com.diana.auditinsightbackendspringboot.Enum.Role;
+import com.diana.auditinsightbackendspringboot.Enum.Permission;
 import com.diana.auditinsightbackendspringboot.Exceptions.Custom.ForbiddenException;
 import com.diana.auditinsightbackendspringboot.Exceptions.Custom.InvalidRecord;
 import com.diana.auditinsightbackendspringboot.Models.Evidence;
@@ -26,8 +25,7 @@ public class EvidenceService {
     private final EvidenceRepository evidenceRepo;
     private final TransactionRepository txnRepo;
     private final OrganisationRepository organisationRepo;
-    private final OrganisationMemberRepository memberRepo;
-    private final UserRepository userRepo;
+    private final OrgAccessService orgAccessService;
     private final TransactionService txnService;
     private final CloudinaryService cloudinaryService;
     private final NotificationService notificationService;
@@ -35,16 +33,14 @@ public class EvidenceService {
     public EvidenceService(EvidenceRepository evidenceRepo,
                            TransactionRepository txnRepo,
                            OrganisationRepository organisationRepo,
-                           OrganisationMemberRepository memberRepo,
-                           UserRepository userRepo,
+                           OrgAccessService orgAccessService,
                            TransactionService txnService,
                            CloudinaryService cloudinaryService,
                            NotificationService notificationService) {
         this.evidenceRepo = evidenceRepo;
         this.txnRepo = txnRepo;
         this.organisationRepo = organisationRepo;
-        this.memberRepo = memberRepo;
-        this.userRepo = userRepo;
+        this.orgAccessService = orgAccessService;
         this.txnService = txnService;
         this.cloudinaryService = cloudinaryService;
         this.notificationService = notificationService;
@@ -69,32 +65,19 @@ public class EvidenceService {
 
 
     private Mono<User> assertCanUpload(UUID orgId, String email) {
-        return userRepo.findByUsername(email)
-                .switchIfEmpty(Mono.error(new InvalidRecord("User not found")))
-                .flatMap(user -> memberRepo.findByOrganisationIdAndUserId(orgId, user.getId())
-                        .switchIfEmpty(Mono.error(new ForbiddenException(
-                                "You are not a member of this organisation")))
-                        .flatMap(m -> {
-                            if (m.getStatus() != MemberStatus.ACTIVE) {
-                                return Mono.error(new ForbiddenException("Your membership is not active"));
-                            }
-                            if (m.getRole() == Role.AUDITOR) {
-                                return Mono.error(new ForbiddenException(
-                                        "Permission denied. Auditors cannot upload evidence."));
-                            }
-                            return Mono.just(user);
-                        }));
+        return orgAccessService.resolveGatedMember(orgId, email)
+                .flatMap(ctx -> {
+                    if (!orgAccessService.hasPermission(ctx.role(), Permission.EVIDENCE_UPLOAD)) {
+                        return Mono.error(new ForbiddenException(
+                                "Permission denied. Auditors cannot upload evidence."));
+                    }
+                    return Mono.just(ctx.user());
+                });
     }
 
     private Mono<User> assertCanView(UUID orgId, String email) {
-        return userRepo.findByUsername(email)
-                .switchIfEmpty(Mono.error(new InvalidRecord("User not found")))
-                .flatMap(user -> memberRepo.findByOrganisationIdAndUserId(orgId, user.getId())
-                        .switchIfEmpty(Mono.error(new ForbiddenException(
-                                "You are not a member of this organisation")))
-                        .flatMap(m -> m.getStatus() != MemberStatus.ACTIVE
-                                ? Mono.error(new ForbiddenException("Your membership is not active"))
-                                : Mono.just(user)));
+        return orgAccessService.resolveGatedMember(orgId, email)
+                .map(ctx -> ctx.user());
     }
 
 

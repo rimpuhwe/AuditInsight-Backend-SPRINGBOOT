@@ -34,6 +34,7 @@ class OrganisationServiceTest {
     @Mock private OrganisationMemberRepository memberRepo;
     @Mock private OrganisationCurrencyRepository currencyRepo;
     @Mock private OrganisationInvitationRepository invitationRepo;
+    @Mock private SubscriptionRepository subscriptionRepo;
     @Mock private UserRepository userRepo;
     @Mock private ClientRepository clientRepo;
     @Mock private AuditorRepository auditorRepo;
@@ -49,7 +50,7 @@ class OrganisationServiceTest {
     @BeforeEach
     void setUp() {
         service = new OrganisationService(
-                orgRepo, memberRepo, currencyRepo, invitationRepo,
+                orgRepo, memberRepo, currencyRepo, invitationRepo, subscriptionRepo,
                 userRepo, clientRepo, auditorRepo, emailService, encoder);
     }
 
@@ -68,10 +69,12 @@ class OrganisationServiceTest {
         when(memberRepo.save(any())).thenReturn(Mono.just(new OrganisationMember()));
         when(currencyRepo.save(any())).thenReturn(Mono.just(new OrganisationCurrency()));
         when(currencyRepo.findAllByOrganisationId(ORG_ID)).thenReturn(Flux.just(currency(ORG_ID, "USD")));
+        when(subscriptionRepo.save(any())).thenAnswer(inv -> Mono.just(inv.getArgument(0)));
 
         CreateOrganisationRequest req = new CreateOrganisationRequest();
         req.setName("Acme");
         req.setIndustry(OrganisationType.PRIVATE);
+        req.setCountryCode(CountryCode.RW);
         req.setFiscalYearStart("01-01");
         req.setFiscalYearEnd("12-31");
         req.setCurrencies(List.of("USD"));
@@ -534,6 +537,7 @@ class OrganisationServiceTest {
         o.setClientId(clientId);
         o.setName(name);
         o.setIndustry(OrganisationType.PRIVATE);
+        o.setCountryCode(CountryCode.RW);
         o.setFiscalYearStart("01-01");
         o.setFiscalYearEnd("12-31");
         o.setDefaultCurrency("USD");

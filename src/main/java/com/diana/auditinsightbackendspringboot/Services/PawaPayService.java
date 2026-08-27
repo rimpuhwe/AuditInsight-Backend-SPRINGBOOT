@@ -36,7 +36,7 @@ public class PawaPayService {
 
     public enum PawaPayStatus { PENDING, SUCCESSFUL, FAILED }
 
-    public record StatusResult(PawaPayStatus status, String failureReason) {}
+    public record StatusResult(PawaPayStatus status, String failureReason, BigDecimal amount) {}
 
     public Mono<Void> requestDeposit(UUID depositId, BigDecimal amountRwf, String phoneNumber) {
         return Mono.fromRunnable(() -> doRequestDeposit(depositId, amountRwf, phoneNumber))
@@ -113,10 +113,11 @@ public class PawaPayService {
             throw new RuntimeException("pawaPay status response missing data");
         }
 
+        BigDecimal amount = data.get("amount") != null ? new BigDecimal(String.valueOf(data.get("amount"))) : null;
         return switch (String.valueOf(data.get("status"))) {
-            case "COMPLETED" -> new StatusResult(PawaPayStatus.SUCCESSFUL, null);
-            case "FAILED" -> new StatusResult(PawaPayStatus.FAILED, extractFailureReason(data));
-            default -> new StatusResult(PawaPayStatus.PENDING, null); // ACCEPTED, PROCESSING, IN_RECONCILIATION
+            case "COMPLETED" -> new StatusResult(PawaPayStatus.SUCCESSFUL, null, amount);
+            case "FAILED" -> new StatusResult(PawaPayStatus.FAILED, extractFailureReason(data), amount);
+            default -> new StatusResult(PawaPayStatus.PENDING, null, amount); // ACCEPTED, PROCESSING, IN_RECONCILIATION
         };
     }
 

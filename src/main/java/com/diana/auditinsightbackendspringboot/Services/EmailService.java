@@ -411,4 +411,50 @@ public class EmailService {
         sendEmail(email, "Action Required: Change your AuditInsight password", html);
     }
 
+    private static final String PLAN_OPTIONS_HTML = """
+            <ul>
+              <li>Monthly — 15,000 RWF</li>
+              <li>6 Months — 80,000 RWF</li>
+              <li>Annual — 150,000 RWF</li>
+            </ul>""";
+
+    public void sendTrialExpiringReminderEmail(String email, String orgName, long daysRemaining, String expiryDate) {
+        if (email == null) {
+            log.error("Cannot send trial expiring reminder: missing email");
+            return;
+        }
+        String html = String.format("""
+                <html><body style='font-family:Arial,sans-serif;'>
+                  <div style='max-width:600px;margin:auto;padding:20px;border:1px solid #ddd;'>
+                    <h2 style='color:#e67e22;'>Your Free Trial Is Ending Soon</h2>
+                    <p>Hello,</p>
+                    <p>The free trial for <b>%s</b> expires in <b>%d day(s)</b>, on <b>%s</b>.</p>
+                    <p>Please select a subscription plan to continue using AuditInsight without interruption:</p>
+                    %s
+                    <p>Log in to AuditInsight to choose a plan and complete payment before your trial ends.</p>
+                  </div>
+                </body></html>""", orgName, daysRemaining, expiryDate, PLAN_OPTIONS_HTML);
+        sendEmail(email, "Your AuditInsight free trial expires in " + daysRemaining + " day(s)", html);
+    }
+
+    public void sendSubscriptionExpiringReminderEmail(String email, String orgName, String subscriptionType,
+                                                        long daysRemaining, String expiryDate) {
+        if (email == null) {
+            log.error("Cannot send subscription expiring reminder: missing email");
+            return;
+        }
+        String html = String.format("""
+                <html><body style='font-family:Arial,sans-serif;'>
+                  <div style='max-width:600px;margin:auto;padding:20px;border:1px solid #ddd;'>
+                    <h2 style='color:#e67e22;'>Your Subscription Is Expiring Soon</h2>
+                    <p>Hello,</p>
+                    <p>The <b>%s</b> subscription for <b>%s</b> expires in <b>%d day(s)</b>, on <b>%s</b>.</p>
+                    <p>Please renew your subscription before the expiry date to maintain uninterrupted access:</p>
+                    %s
+                    <p>Log in to AuditInsight to renew now.</p>
+                  </div>
+                </body></html>""", subscriptionType, orgName, daysRemaining, expiryDate, PLAN_OPTIONS_HTML);
+        sendEmail(email, "Your AuditInsight subscription expires in " + daysRemaining + " day(s)", html);
+    }
+
 }

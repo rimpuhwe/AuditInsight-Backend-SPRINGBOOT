@@ -23,6 +23,7 @@ import java.util.UUID;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -32,6 +33,7 @@ class ReviewQueueServiceTest {
     @Mock private TransactionRepository txnRepo;
     @Mock private OrganisationMemberRepository memberRepo;
     @Mock private UserRepository userRepo;
+    @Mock private SubscriptionRepository subscriptionRepo;
     @Mock private NotificationService notificationService;
 
     private ReviewQueueService service;
@@ -43,7 +45,10 @@ class ReviewQueueServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new ReviewQueueService(reviewRepo, txnRepo, memberRepo, userRepo, notificationService);
+        OrgAccessService orgAccessService = new OrgAccessService(userRepo, memberRepo, subscriptionRepo);
+        service = new ReviewQueueService(reviewRepo, txnRepo, orgAccessService, notificationService);
+        lenient().when(subscriptionRepo.findFirstByOrganisationIdOrderByCreatedAtDesc(ORG_ID))
+                .thenReturn(Mono.just(activeSubscription(ORG_ID)));
     }
 
     // ──────────────────────────── flagIssue ──────────────────────────────────
@@ -259,6 +264,15 @@ class ReviewQueueServiceTest {
         m.setRole(role);
         m.setStatus(MemberStatus.ACTIVE);
         return m;
+    }
+
+    private Subscription activeSubscription(UUID orgId) {
+        Subscription s = new Subscription();
+        s.setId(UUID.randomUUID());
+        s.setOrganisationId(orgId);
+        s.setStatus(SubscriptionStatus.ACTIVE);
+        s.setEndDate(LocalDateTime.now().plusDays(10));
+        return s;
     }
 
     private Transaction txn(UUID id) {
