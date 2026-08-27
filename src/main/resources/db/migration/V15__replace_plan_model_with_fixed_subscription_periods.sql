@@ -1,7 +1,8 @@
 -- Replace the 4-tier USD plan catalog with 3 fixed-price RWF subscription periods
--- (MONTHLY/SIX_MONTHS/ANNUAL) plus a TRIAL lifecycle state. Nothing is live in production yet
--- (see the now-removed V11 sandbox-price hack), so this migrates the schema in place rather than
--- adding a parallel structure.
+-- (MONTHLY/SIX_MONTHS/ANNUAL) plus a TRIAL lifecycle state. Existing rows may still carry
+-- legacy plan tiers (FREE/STARTER/PROFESSIONAL/ENTERPRISE, seeded in V9 and exercised by the
+-- now-removed V11 sandbox-price hack) which have no fixed-duration equivalent, so those values
+-- are cleared to NULL rather than dropped, preserving the historical rows.
 
 ALTER TABLE subscriptions RENAME COLUMN plan_tier TO subscription_type;
 ALTER TABLE payments RENAME COLUMN plan_tier TO subscription_type;
@@ -10,7 +11,14 @@ ALTER TABLE payments RENAME COLUMN plan_tier TO subscription_type;
 DROP TABLE plans CASCADE;
 
 ALTER TABLE subscriptions
-    ALTER COLUMN subscription_type DROP NOT NULL,
+    ALTER COLUMN subscription_type DROP NOT NULL;
+
+-- Legacy plan tiers (FREE/STARTER/PROFESSIONAL/ENTERPRISE) don't map to a fixed subscription
+-- period; clear them so the new check constraint can be added without rejecting old rows.
+UPDATE subscriptions SET subscription_type = NULL
+    WHERE subscription_type NOT IN ('MONTHLY','SIX_MONTHS','ANNUAL');
+
+ALTER TABLE subscriptions
     ADD CONSTRAINT chk_subscriptions_subscription_type
         CHECK (subscription_type IN ('MONTHLY','SIX_MONTHS','ANNUAL')),
     DROP COLUMN billing_cycle,
@@ -22,6 +30,12 @@ ALTER TABLE subscriptions ADD CONSTRAINT subscriptions_status_check
     CHECK (status IN ('TRIAL','PENDING','ACTIVE','EXPIRED','CANCELLED'));
 
 CREATE INDEX idx_subscriptions_end_date_status ON subscriptions (end_date, status);
+
+ALTER TABLE payments
+    ALTER COLUMN subscription_type DROP NOT NULL;
+
+UPDATE payments SET subscription_type = NULL
+    WHERE subscription_type NOT IN ('MONTHLY','SIX_MONTHS','ANNUAL');
 
 ALTER TABLE payments
     ADD CONSTRAINT chk_payments_subscription_type
